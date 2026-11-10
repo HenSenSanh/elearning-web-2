@@ -1,29 +1,57 @@
 # Hướng dẫn xây dựng trang Admin quản lý sản phẩm bằng PHP, MySQL và Docker
 
-Dự án này là bộ source PHP thuần cơ bản cho trang quản trị sản phẩm. Hệ thống phù hợp cho bài thực hành môn lập trình web, cơ sở dữ liệu hoặc làm nền tảng mở rộng thành website bán hàng.
+Dự án này là bộ source PHP thuần hoàn chỉnh cho trang quản trị thương mại điện tử / quản lý sản phẩm. Hệ thống đáp ứng đầy đủ nghiệp vụ quản lý bán hàng, kho vận, khách hàng, bảo mật và cung cấp REST API.
 
 ## 1. Chức năng chính
 
-- Đăng nhập trang admin.
-- Dashboard thống kê tổng danh mục, tổng sản phẩm, tổng tồn kho và giá trị tồn kho.
-- Quản lý danh mục sản phẩm:
-  - Thêm danh mục.
-  - Sửa danh mục.
-  - Xóa danh mục.
+- **Xác thực & Bảo mật**:
+  - Đăng nhập/Đăng xuất admin.
+  - Mã hóa mật khẩu chuẩn **BCRYPT** bằng `password_hash()` & `password_verify()` (tự động nâng cấp hash SHA-256 cũ).
+  - Quên mật khẩu qua email token bảo mật (hết hạn sau 1 giờ).
+  - Bảo vệ mọi form chống tấn công CSRF bằng CSRF token.
+  - Chống SQL Injection bằng PDO Prepared Statements.
+  - Nhật ký hoạt động Admin (Activity Audit Logs) ghi nhận lịch sử mọi thao tác kèm địa chỉ IP.
+- **Dashboard**:
+  - Thống kê tổng danh mục, thương hiệu, tổng sản phẩm, số lượng tồn kho và tổng giá trị tồn kho.
+- **Quản lý danh mục (Categories)**:
+  - Thêm, sửa, xóa danh mục (chặn xóa an toàn nếu có sản phẩm).
   - Bật/tắt trạng thái hiển thị.
-- Quản lý sản phẩm:
-  - Thêm sản phẩm.
-  - Sửa sản phẩm.
-  - Xóa sản phẩm.
-  - Upload hình ảnh sản phẩm.
-  - Quản lý tên sản phẩm, danh mục, SKU, mô tả, số lượng, đơn giá, trạng thái.
-  - Tìm kiếm theo tên sản phẩm hoặc SKU.
-  - Lọc theo danh mục.
-- Kết nối MySQL bằng PDO.
-- Validate dữ liệu bằng JavaScript và PHP.
-- Bảo vệ form bằng CSRF token.
-- Chạy bằng Docker Compose.
-- Có phpMyAdmin để kiểm tra dữ liệu.
+- **Quản lý thương hiệu (Brands)**:
+  - Thêm, sửa, xóa thương hiệu (chặn xóa nếu có sản phẩm liên kết).
+  - Liên kết thương hiệu với sản phẩm và bộ lọc.
+- **Quản lý sản phẩm (Products)**:
+  - Thêm, sửa, xóa sản phẩm kèm phân trang (5 sản phẩm/trang).
+  - Tìm kiếm theo tên sản phẩm hoặc SKU; lọc theo danh mục và thương hiệu.
+  - Upload ảnh đại diện chính (JPG, PNG, WEBP, GIF tối đa 2MB; tự xóa ảnh cũ).
+  - **Bộ sưu tập nhiều hình ảnh (Gallery)**: Upload nhiều ảnh bổ sung, quản lý và xóa từng ảnh trong gallery.
+- **Quản lý Nhập / Xuất kho (Inventory)**:
+  - Tạo phiếu nhập kho (+) và xuất kho (-) có kiểm tra ràng buộc tồn kho.
+  - Tự động đồng bộ số lượng tồn kho sản phẩm theo transaction CSDL.
+  - Theo dõi lịch sử biến động kho và thống kê tổng lượng nhập/xuất.
+- **Quản lý Khách hàng (Customers)**:
+  - Quản lý thông tin khách hàng (họ tên, email duy nhất, số điện thoại, địa chỉ).
+  - Tìm kiếm và phân trang danh sách khách hàng.
+- **Quản lý Đơn hàng (Orders & Items)**:
+  - Tạo đơn hàng cho khách hàng với nhiều sản phẩm.
+  - Tự động trừ tồn kho khi tạo đơn và hoàn kho khi hủy đơn (`cancelled`).
+  - Cập nhật trạng thái đơn: Chờ xử lý (`pending`), Đang xử lý (`processing`), Hoàn thành (`completed`), Đã hủy (`cancelled`).
+- **Xuất dữ liệu Excel / CSV**:
+  - Xuất danh sách sản phẩm, lịch sử kho, danh sách đơn hàng ra file CSV chuẩn UTF-8 BOM hiển thị tiếng Việt hoàn hảo trên Microsoft Excel.
+- **REST API Subsystem**:
+  - Cung cấp API JSON chuẩn RESTful cho bên thứ ba hoặc Mobile App:
+    - `GET /api/categories`
+    - `GET /api/brands`
+    - `GET /api/products` (kèm lọc, tìm kiếm, phân trang)
+    - `GET /api/products?id={id}`
+    - `POST /api/products`
+    - `PUT /api/products?id={id}`
+    - `DELETE /api/products?id={id}`
+    - `GET /api/orders`
+    - `POST /api/orders`
+    - `GET /api/customers`
+  - Hỗ trợ CORS đầy đủ cho frontend React/Vue/Flutter.
+
+---
 
 ## 2. Cấu trúc thư mục
 
@@ -31,520 +59,168 @@ Dự án này là bộ source PHP thuần cơ bản cho trang quản trị sản
 php_admin_product_manager/
 ├── app/
 │   ├── public/
-│   │   ├── index.php
-│   │   ├── .htaccess
+│   │   ├── index.php                 # Front controller & router chính
+│   │   ├── .htaccess                 # Cấu hình rewrite URL cho Apache
 │   │   ├── assets/
-│   │   │   ├── css/admin.css
-│   │   │   └── js/admin.js
-│   │   └── uploads/products/
+│   │   │   ├── css/admin.css         # Giao diện responsive
+│   │   │   └── js/admin.js           # Client-side validation
+│   │   └── uploads/products/         # Thư mục lưu trữ hình ảnh tải lên
 │   ├── src/
-│   │   ├── auth.php
-│   │   ├── config.php
-│   │   ├── db.php
-│   │   ├── helpers.php
-│   │   ├── category_repository.php
-│   │   └── product_repository.php
-│   └── views/
-│       ├── layouts/
-│       ├── auth/
-│       ├── dashboard/
-│       ├── categories/
-│       └── products/
-├── database/init.sql
-├── docker/php/Dockerfile
-├── .env
+│   │   ├── config.php                # Cấu hình hệ thống & biến môi trường
+│   │   ├── db.php                    # Kết nối MySQL PDO Singleton
+│   │   ├── helpers.php               # Helper CSRF, Flash, Upload file
+│   │   ├── auth.php                  # Xử lý xác thực admin (BCRYPT)
+│   │   ├── category_repository.php   # Nghiệp vụ danh mục
+│   │   ├── brand_repository.php      # Nghiệp vụ thương hiệu
+│   │   ├── product_repository.php    # Nghiệp vụ sản phẩm & gallery
+│   │   ├── inventory_repository.php  # Nghiệp vụ nhập/xuất kho
+│   │   ├── customer_repository.php   # Nghiệp vụ khách hàng
+│   │   ├── order_repository.php      # Nghiệp vụ đơn hàng & chi tiết đơn
+│   │   ├── export_service.php        # Dịch vụ xuất file CSV / Excel UTF-8 BOM
+│   │   ├── activity_log_repository.php # Ghi nhận nhật ký audit log
+│   │   ├── password_reset_repository.php # Xử lý token quên mật khẩu
+│   │   └── api_controller.php        # Xử lý và điều phối REST API JSON
+│   ├── views/
+│   │   ├── layouts/ (header, footer)
+│   │   ├── auth/ (login, forgot_password, reset_password)
+│   │   ├── dashboard/
+│   │   ├── categories/
+│   │   ├── brands/
+│   │   ├── products/
+│   │   ├── inventory/
+│   │   ├── customers/
+│   │   ├── orders/
+│   │   └── activity_logs/
+│   ├── tests/
+│   │   └── test_all_cases.php        # Bộ kiểm thử tự động 65 Test Cases
+│   └── migrate_schema.php            # Script tự động di chuyển CSDL
+├── database/
+│   └── init.sql                      # CSDL ban đầu & seed data
+├── docker/
+│   └── php/Dockerfile
+├── .env                              # Biến môi trường
 ├── docker-compose.yml
 └── README.md
 ```
 
+---
+
 ## 3. Thiết kế database
 
-Database gồm 3 bảng chính:
+Database gồm 9 bảng chính:
 
 ```text
 admins
 categories
+brands
 products
+product_images
+inventory_logs
+customers
+orders
+order_items
+activity_logs
+password_resets
 ```
 
 ### 3.1. Bảng admins
-
-Dùng để lưu tài khoản quản trị.
-
-| Cột | Ý nghĩa |
-|---|---|
-| id | Khóa chính |
-| username | Tên đăng nhập |
-| email | Email admin |
-| password_hash | Mật khẩu mã hóa BCRYPT (VARCHAR 255) |
-| full_name | Họ tên admin |
-| created_at | Ngày tạo |
-| updated_at | Ngày cập nhật |
-
-Tài khoản mặc định:
-
-```text
-Username: admin
-Password: admin123
-```
-
-Mật khẩu trong database được mã hóa bằng chuẩn bảo mật BCRYPT:
-
-```php
-password_hash("admin123", PASSWORD_BCRYPT)
-```
-
-Trong PHP kiểm tra bằng:
-
-```php
-password_verify($password, $admin["password_hash"])
-```
-
-Hệ thống có cơ chế tự động nhận diện và nâng cấp các mật khẩu cũ từ SHA-256 lên BCRYPT ngay khi đăng nhập.
+Lưu trữ tài khoản quản trị:
+- `id`, `username`, `email`, `password_hash` (BCRYPT), `full_name`, `created_at`, `updated_at`.
+- Tài khoản mặc định: `admin` / `admin123`.
 
 ### 3.2. Bảng categories
+Lưu trữ danh mục:
+- `id`, `name` (UNIQUE), `description`, `status`, `created_at`, `updated_at`.
 
-Dùng để lưu danh mục/loại sản phẩm.
+### 3.3. Bảng brands
+Lưu trữ thương hiệu / hãng sản xuất:
+- `id`, `name` (UNIQUE), `description`, `status`, `created_at`, `updated_at`.
 
-| Cột | Ý nghĩa |
-|---|---|
-| id | Khóa chính |
-| name | Tên danh mục |
-| description | Mô tả danh mục |
-| status | Trạng thái hiển thị |
-| created_at | Ngày tạo |
-| updated_at | Ngày cập nhật |
+### 3.4. Bảng products
+Lưu trữ sản phẩm:
+- `id`, `category_id` (FK categories), `brand_id` (FK brands), `name`, `sku` (UNIQUE), `description`, `quantity`, `unit_price`, `image_path`, `status`, `created_at`, `updated_at`.
 
-### 3.3. Bảng products
+### 3.5. Bảng product_images
+Bộ sưu tập nhiều ảnh cho sản phẩm:
+- `id`, `product_id` (FK products ON DELETE CASCADE), `image_path`, `sort_order`, `created_at`.
 
-Dùng để lưu sản phẩm.
+### 3.6. Bảng inventory_logs
+Nhật ký nhập / xuất kho:
+- `id`, `product_id` (FK products), `admin_id` (FK admins), `type` ('IN' hoặc 'OUT'), `quantity`, `note`, `created_at`.
 
-| Cột | Ý nghĩa |
-|---|---|
-| id | Khóa chính |
-| category_id | Khóa ngoại đến bảng categories |
-| name | Tên sản phẩm |
-| sku | Mã sản phẩm |
-| description | Mô tả sản phẩm |
-| quantity | Số lượng tồn kho |
-| unit_price | Đơn giá |
-| image_path | Đường dẫn hình ảnh |
-| status | Trạng thái hiển thị |
-| created_at | Ngày tạo |
-| updated_at | Ngày cập nhật |
+### 3.7. Bảng customers
+Quản lý khách hàng:
+- `id`, `name`, `email` (UNIQUE), `phone`, `address`, `status`, `created_at`, `updated_at`.
 
-Quan hệ:
+### 3.8. Bảng orders & order_items
+Quản lý đơn hàng và từng dòng sản phẩm:
+- `orders`: `id`, `order_code` (UNIQUE), `customer_id` (FK customers), `total_amount`, `status` ('pending', 'processing', 'completed', 'cancelled'), `notes`, `created_at`, `updated_at`.
+- `order_items`: `id`, `order_id` (FK orders ON DELETE CASCADE), `product_id` (FK products), `quantity`, `unit_price`, `subtotal`, `created_at`.
 
-```text
-categories 1 ----- n products
-```
+### 3.9. Bảng activity_logs & password_resets
+- `activity_logs`: `id`, `admin_id`, `action`, `description`, `ip_address`, `created_at`.
+- `password_resets`: `id`, `email`, `token` (UNIQUE 64 chars), `expires_at`, `created_at`.
 
-Một danh mục có nhiều sản phẩm. Một sản phẩm thuộc một danh mục.
+---
 
-## 4. Cài Docker Desktop
+## 4. Chạy project với Docker
 
-### Windows
-
-1. Tải và cài Docker Desktop.
-2. Bật WSL2 nếu Docker yêu cầu.
-3. Mở Docker Desktop.
-4. Kiểm tra:
-
+Khởi động các container:
 ```bash
-docker --version
-docker compose version
-```
-
-### macOS
-
-1. Tải Docker Desktop đúng bản Apple Silicon hoặc Intel.
-2. Kéo Docker vào Applications.
-3. Mở Docker Desktop.
-4. Kiểm tra:
-
-```bash
-docker --version
-docker compose version
-```
-
-### Linux
-
-Với Ubuntu, cài Docker Engine và Docker Compose plugin. Sau đó kiểm tra:
-
-```bash
-docker --version
-docker compose version
-```
-
-## 5. Cấu hình biến môi trường
-
-File `.env`:
-
-```env
-APP_NAME=PHP Admin Product Manager
-APP_URL=http://localhost:8090
-APP_ENV=local
-
-DB_HOST=mysql
-DB_PORT=3306
-DB_DATABASE=admin_product_db
-DB_USERNAME=admin_user
-DB_PASSWORD=admin_password
-DB_ROOT_PASSWORD=root_password
-
-SESSION_NAME=ADMIN_PRODUCT_SESSION
-UPLOAD_MAX_SIZE=2097152
-```
-
-Trong Docker, PHP kết nối MySQL bằng hostname `mysql`, không dùng `localhost`.
-
-## 6. Chạy project
-
-Tại thư mục gốc:
-
-```bash
-docker compose build
 docker compose up -d
 ```
 
-Kiểm tra container:
-
+Kiểm tra trạng thái container:
 ```bash
 docker ps
 ```
 
-Truy cập trang admin:
+Truy cập:
+- **Trang Admin**: [http://localhost:8090](http://localhost:8090)
+  - Tài khoản: `admin`
+  - Mật khẩu: `admin123`
+- **phpMyAdmin**: [http://localhost:8091](http://localhost:8091)
+  - Server: `mysql` | User: `admin_user` | Pass: `admin_password` | DB: `admin_product_db`
 
-```text
-http://localhost:8090
-```
+---
 
-Truy cập phpMyAdmin:
+## 5. Tự động kiểm thử (Automated Test Suite)
 
-```text
-http://localhost:8091
-```
-
-Đăng nhập admin:
-
-```text
-Username: admin
-Password: admin123
-```
-
-Đăng nhập phpMyAdmin:
-
-```text
-Server: mysql
-Username: admin_user
-Password: admin_password
-Database: admin_product_db
-```
-
-## 7. Luồng xử lý đăng nhập
-
-```text
-Admin nhập username/password
-    ↓
-PHP tìm admin trong bảng admins
-    ↓
-Mã hóa password nhập vào bằng SHA256
-    ↓
-So sánh với password_hash trong database
-    ↓
-Nếu đúng thì lưu session
-    ↓
-Chuyển vào dashboard
-```
-
-Session chính:
-
-```php
-$_SESSION["admin_id"]
-$_SESSION["admin_username"]
-$_SESSION["admin_full_name"]
-```
-
-## 8. Quản lý danh mục
-
-Các route:
-
-| Route | Chức năng |
-|---|---|
-| /categories | Danh sách danh mục |
-| /categories/create | Thêm danh mục |
-| /categories/edit?id=1 | Sửa danh mục |
-| /categories/delete | Xóa danh mục |
-
-Các hàm chính:
-
-```php
-category_all()
-category_active_all()
-category_find($id)
-category_create($name, $description, $status)
-category_update($id, $name, $description, $status)
-category_delete($id)
-```
-
-## 9. Quản lý sản phẩm
-
-Các route:
-
-| Route | Chức năng |
-|---|---|
-| /products | Danh sách sản phẩm |
-| /products/create | Thêm sản phẩm |
-| /products/edit?id=1 | Sửa sản phẩm |
-| /products/delete | Xóa sản phẩm |
-
-Các hàm chính:
-
-```php
-product_paginate($keyword, $categoryId, $page, $perPage)
-product_find($id)
-product_create($data)
-product_update($id, $data)
-product_delete($id)
-product_count()
-product_total_quantity()
-product_total_inventory_value()
-```
-
-Hệ thống hỗ trợ phân trang linh hoạt (mặc định 5 sản phẩm/trang) kèm giao diện chuyển trang (`« Đầu`, `‹ Trước`, `1, 2, ...`, `Sau ›`, `Cuối »`), tự động giữ nguyên các tham số tìm kiếm và bộ lọc trên URL.
-
-## 10. Upload hình ảnh
-
-Hình sản phẩm được lưu tại:
-
-```text
-app/public/uploads/products
-```
-
-Quy tắc upload:
-
-| Quy tắc | Giá trị |
-|---|---|
-| Định dạng | JPG, PNG, WEBP, GIF |
-| Dung lượng tối đa | 2MB |
-| Tên file | Tạo tự động bằng thời gian + chuỗi random |
-| Đường dẫn lưu DB | uploads/products/ten_file |
-
-Khi sửa sản phẩm và upload ảnh mới, ảnh cũ sẽ được xóa khỏi thư mục upload.
-
-## 11. Validate dữ liệu
-
-### Client-side
-
-File:
-
-```text
-app/public/assets/js/admin.js
-```
-
-Kiểm tra:
-
-- Tên sản phẩm không rỗng.
-- Phải chọn danh mục.
-- Số lượng không âm.
-- Đơn giá không âm.
-- File upload phải là ảnh.
-- File upload không quá 2MB.
-
-### Server-side
-
-File:
-
-```text
-app/public/index.php
-```
-
-Hàm:
-
-```php
-validate_product_input($_POST)
-```
-
-Server vẫn kiểm tra lại để tránh trường hợp người dùng tắt JavaScript hoặc gửi request thủ công.
-
-## 12. CSRF token
-
-Mỗi form có token:
-
-```php
-<?= csrf_field() ?>
-```
-
-Khi submit, hệ thống kiểm tra bằng:
-
-```php
-verify_csrf()
-```
-
-## 13. Lệnh Docker thường dùng
-
-Build:
-
-```bash
-docker compose build
-```
-
-Chạy:
-
-```bash
-docker compose up -d
-```
-
-Xem log:
-
-```bash
-docker compose logs
-```
-
-Dừng:
-
-```bash
-docker compose down
-```
-
-Dừng và xóa database volume:
-
-```bash
-docker compose down -v
-```
-
-Chạy lại từ đầu:
-
-```bash
-docker compose down -v
-docker compose up -d --build
-```
-
-## 14. Docker push image
-
-Build image:
-
-```bash
-docker build -t php-admin-product-manager:1.0 -f docker/php/Dockerfile .
-```
-
-Đăng nhập Docker Hub:
-
-```bash
-docker login
-```
-
-Tag image:
-
-```bash
-docker tag php-admin-product-manager:1.0 yourdockerhub/php-admin-product-manager:1.0
-```
-
-Push image:
-
-```bash
-docker push yourdockerhub/php-admin-product-manager:1.0
-```
-
-## 15. Test case & Tự động kiểm thử
-
-### Chạy kiểm thử tự động (Automated Test Suite)
-
-Dự án tích hợp bộ kiểm thử tự động 27 test cases bao quát tất cả các kịch bản:
+Dự án tích hợp bộ kiểm thử tự động gồm **65 Test Cases** bao quát toàn bộ chức năng:
 
 ```bash
 docker exec php_admin_product_app php /var/www/html/tests/test_all_cases.php
 ```
 
-### Danh sách Test Case chi tiết
+### Các nhóm kiểm thử chính:
+1. **Module 1 - Authentication**: Đăng nhập trống, sai tài khoản, sai mật khẩu, đăng nhập chuẩn BCRYPT.
+2. **Module 2 - Category**: Trùng tên danh mục, thêm, sửa, ràng buộc toàn vẹn khi có sản phẩm liên kết, xóa an toàn.
+3. **Module 2B - Brand**: Trùng tên thương hiệu, thêm, sửa, kiểm tra sản phẩm thuộc thương hiệu, xóa thương hiệu.
+4. **Module 3 - Product**: Validate tên rỗng, danh mục rỗng, số lượng âm, đơn giá âm, trùng SKU, phân trang, tìm kiếm, lọc danh mục/thương hiệu.
+5. **Module 3B - Product Gallery**: Thêm nhiều ảnh vào bộ sưu tập, xóa từng ảnh, cascade khi xóa sản phẩm.
+6. **Module 3C - Inventory**: Nhập kho tăng tồn, xuất kho giảm tồn, chặn xuất kho quá số lượng hiện có, phân trang lịch sử kho.
+7. **Module 3D - Customer**: Kiểm tra trùng email, thêm, sửa, tìm kiếm và phân trang khách hàng, xóa khách hàng.
+8. **Module 3E - Orders**: Tạo đơn tự động sinh mã `ORD-...`, trừ tồn kho, lưu chi tiết từng sản phẩm, chặn đặt hàng vượt quá tồn kho, tự động hoàn kho khi đơn bị hủy (`cancelled`).
+9. **Module 3F - CSV Export**: Xuất file CSV có UTF-8 BOM, hiển thị tiếng Việt có dấu chuẩn xác trên Excel, xử lý dấu phẩy và ngoặc kép.
+10. **Module 3G - Activity Logs**: Tự động ghi lại nhật ký thao tác và truy xuất lịch sử audit.
+11. **Module 3H - Password Reset**: Tạo token 64 ký tự, xác thực thời hạn token, áp dụng mật khẩu mới bằng BCRYPT, thu hồi token sau khi sử dụng.
+12. **Module 3I - REST API**: Kiểm tra các endpoint JSON (`/api/categories`, `/api/brands`, `/api/products`, `/api/orders`), mã trạng thái HTTP 200, 201, 400, 404.
+13. **Module 4, 5, 6**: Dashboard metrics, CSRF token security, Flash messages.
 
-#### 15.1. Đăng nhập (Authentication)
+---
 
-| ID | Kịch bản kiểm thử | Dữ liệu đầu vào | Kết quả mong đợi |
-|---|---|---|---|
-| TC-AUTH-01 | Bỏ trống tài khoản & mật khẩu | `username=""`, `password=""` | Báo lỗi: "Vui lòng nhập tài khoản và mật khẩu." |
-| TC-AUTH-02 | Tài khoản không tồn tại | `username="unknown"`, `password="123"` | Báo lỗi: "Tài khoản không tồn tại." |
-| TC-AUTH-03 | Sai mật khẩu | `username="admin"`, `password="wrong"` | Báo lỗi: "Mật khẩu không chính xác." |
-| TC-AUTH-04 | Đăng nhập đúng | `username="admin"`, `password="admin123"` | Vào trang Dashboard, lưu session |
-| TC-AUTH-05 | Truy cập trang quản trị khi chưa đăng nhập | Truy cập `/categories` hoặc `/products` | Tự động chuyển hướng về `/login` |
+## 6. Hướng phát triển tiếp (Trạng thái triển khai)
 
-#### 15.2. Quản lý Danh mục (Category)
+Toàn bộ các tính năng định hướng đã được triển khai hoàn chỉnh vào hệ thống:
 
-| ID | Kịch bản kiểm thử | Dữ liệu đầu vào | Kết quả mong đợi |
-|---|---|---|---|
-| TC-CAT-01 | Tên danh mục rỗng (Client & Server) | `name=""` | Báo lỗi: "Tên danh mục không được để trống." |
-| TC-CAT-02 | Tên danh mục đã tồn tại (Duplicate) | `name="Laptop"` (đã có) | Báo lỗi: "Tên danh mục đã tồn tại, vui lòng chọn tên khác." |
-| TC-CAT-03 | Thêm danh mục hợp lệ | `name="Chuột văn phòng"`, `status=1` | Lưu vào database, thông báo "Thêm danh mục thành công." |
-| TC-CAT-04 | Sửa danh mục | Cập nhật tên, mô tả hoặc trạng thái | Cập nhật database, thông báo "Cập nhật danh mục thành công." |
-| TC-CAT-05 | Xóa danh mục đang có sản phẩm liên kết | Nhấn Xóa danh mục "Laptop" | Chặn xóa an toàn và báo lỗi: "Không thể xóa danh mục này vì vẫn còn sản phẩm thuộc danh mục." |
-| TC-CAT-06 | Xóa danh mục trống (không có sản phẩm) | Nhấn Xóa danh mục chưa có sản phẩm | Xóa khỏi DB, thông báo "Xóa danh mục thành công." |
-
-#### 15.3. Quản lý Sản phẩm (Product)
-
-| ID | Kịch bản kiểm thử | Dữ liệu đầu vào | Kết quả mong đợi |
-|---|---|---|---|
-| TC-PROD-01 | Tên sản phẩm rỗng | `name=""` | Báo lỗi: "Tên sản phẩm không được để trống." |
-| TC-PROD-02 | Chưa chọn danh mục | `category_id=""` hoặc `0` | Báo lỗi: "Vui lòng chọn danh mục sản phẩm." |
-| TC-PROD-03 | Số lượng âm | `quantity="-5"` | Báo lỗi: "Số lượng phải lớn hơn hoặc bằng 0." |
-| TC-PROD-04 | Đơn giá âm | `unit_price="-1000"` | Báo lỗi: "Đơn giá phải lớn hơn hoặc bằng 0." |
-| TC-PROD-05 | Trùng mã SKU | `sku="LAP-DELL-001"` (đã có) | Báo lỗi: "Mã SKU 'LAP-DELL-001' đã tồn tại, vui lòng chọn mã khác." |
-| TC-PROD-06 | Upload file không phải ảnh | File `.txt`, `.pdf`, `.exe` | Báo lỗi: "Chỉ cho phép JPG, PNG, WEBP hoặc GIF." |
-| TC-PROD-07 | Upload ảnh vượt quá 2MB | File ảnh dung lượng > 2MB | Báo lỗi: "Dung lượng hình ảnh vượt quá giới hạn." / "tối đa là 2MB." |
-| TC-PROD-08 | Thêm sản phẩm hợp lệ | Đầy đủ thông tin hợp lệ | Lưu DB và upload file ảnh vào `uploads/products/`, hiển thị thông báo thành công |
-| TC-PROD-09 | Sửa sản phẩm và đổi ảnh mới | Chọn ảnh mới khi sửa | Lưu ảnh mới, tự động xóa ảnh cũ khỏi ổ đĩa, cập nhật DB |
-| TC-PROD-10 | Xóa sản phẩm | Nhấn Xóa sản phẩm | Xóa record trong DB và xóa luôn file ảnh vật lý |
-| TC-PROD-11 | Tìm kiếm sản phẩm | Nhập keyword tên hoặc SKU | Lọc ra đúng danh sách sản phẩm |
-| TC-PROD-12 | Lọc theo danh mục | Chọn danh mục từ dropdown | Lọc ra đúng các sản phẩm thuộc danh mục |
-
-## 16. Lỗi thường gặp
-
-### Không kết nối được MySQL
-
-Kiểm tra `.env`:
-
-```env
-DB_HOST=mysql
-```
-
-Không dùng `localhost` trong Docker container.
-
-### Database không có bảng
-
-Nếu MySQL volume đã tồn tại, `init.sql` không chạy lại. Xử lý:
-
-```bash
-docker compose down -v
-docker compose up -d --build
-```
-
-### Upload ảnh lỗi
-
-Kiểm tra thư mục:
-
-```text
-app/public/uploads/products
-```
-
-Có thể cấp quyền:
-
-```bash
-chmod -R 775 app/public/uploads
-```
-
-### Cổng bị trùng
-
-Nếu `8090` hoặc `8091` bị trùng, sửa trong `docker-compose.yml`.
-
-## 17. Hướng phát triển tiếp
-
-- Thêm nhiều ảnh cho một sản phẩm.
-- Thêm thương hiệu.
-- Thêm nhập kho/xuất kho.
-- Thêm đơn hàng.
-- Thêm khách hàng.
-- Thêm phân trang.
-- Thêm export Excel.
-- Thêm REST API.
-- Thay SHA256 bằng `password_hash()`.
-- Thêm quên mật khẩu qua email.
-- Thêm log hoạt động admin.
+- [x] **Thêm nhiều ảnh cho một sản phẩm**: Bảng `product_images`, upload ảnh gallery, quản lý và xóa từng ảnh.
+- [x] **Thêm thương hiệu**: Bảng `brands`, quản lý CRUD hãng, lọc sản phẩm theo thương hiệu.
+- [x] **Thêm nhập kho/xuất kho**: Bảng `inventory_logs`, giao dịch xuất nhập, cập nhật tồn kho an toàn.
+- [x] **Thêm đơn hàng**: Bảng `orders` & `order_items`, tạo đơn, quản lý trạng thái, tự động trừ/hoàn kho.
+- [x] **Thêm khách hàng**: Bảng `customers`, quản lý thông tin khách hàng, kiểm tra trùng lặp email.
+- [x] **Thêm phân trang**: Đã triển khai linh hoạt trên toàn bộ các danh sách sản phẩm, khách hàng, đơn hàng, kho.
+- [x] **Thêm export Excel**: Hỗ trợ xuất file CSV định dạng UTF-8 BOM chuẩn cho Excel.
+- [x] **Thêm REST API**: Cung cấp đầy đủ các endpoint JSON cho products, categories, brands, orders kèm CORS.
+- [x] **Thay SHA256 bằng password_hash()**: Sử dụng chuẩn BCRYPT hiện đại nhất kèm cơ chế auto-upgrade.
+- [x] **Thêm quên mật khẩu qua email**: Hệ thống sinh token bảo mật 64 ký tự có hạn dùng 1 giờ.
+- [x] **Thêm log hoạt động admin**: Bảng `activity_logs`, ghi nhận mọi hành động nhạy cảm trên hệ thống.
