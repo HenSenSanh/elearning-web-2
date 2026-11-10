@@ -207,6 +207,33 @@ product_delete((int)$createdProduct["id"]);
 $deletedProductCheck = product_find((int)$createdProduct["id"]);
 assert_test("3.11 Delete product successfully", $deletedProductCheck === null);
 
+// --- MODULE 3B: PRODUCT GALLERY (MULTIPLE IMAGES) ---
+echo "\n--- MODULE 3B: PRODUCT GALLERY (MULTIPLE IMAGES) ---\n";
+// Create demo product for gallery test
+$galleryProdId = product_create([
+    "category_id" => (int)$laptopCat["id"],
+    "brand_id" => (int)$dellBrand["id"],
+    "name" => "Gallery Test Laptop",
+    "sku" => "TEST-GALLERY-" . time(),
+    "description" => "Test gallery",
+    "quantity" => 5,
+    "unit_price" => 12000000,
+    "image_path" => null,
+    "status" => 1
+]);
+$imgId1 = product_image_add($galleryProdId, "uploads/products/test1.jpg", 1);
+$imgId2 = product_image_add($galleryProdId, "uploads/products/test2.jpg", 2);
+$galleryImages = product_images_find($galleryProdId);
+assert_test("3B.1 Add multiple gallery images", count($galleryImages) === 2 && (int)$galleryImages[0]["id"] === $imgId1);
+
+product_image_delete($imgId1);
+$galleryImagesAfter = product_images_find($galleryProdId);
+assert_test("3B.2 Delete single gallery image", count($galleryImagesAfter) === 1 && (int)$galleryImagesAfter[0]["id"] === $imgId2);
+
+product_delete($galleryProdId);
+$galleryImagesCleaned = product_images_find($galleryProdId);
+assert_test("3B.3 Cascade cleanup on product delete", count($galleryImagesCleaned) === 0);
+
 
 // --- MODULE 4: DASHBOARD METRICS ---
 echo "\n--- MODULE 4: DASHBOARD METRICS ---\n";

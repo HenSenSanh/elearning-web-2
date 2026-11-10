@@ -110,3 +110,42 @@ function product_exists_sku(string $sku, int $excludeId = 0): bool {
     $stmt->execute(["sku" => trim($sku), "id" => $excludeId]);
     return (int) $stmt->fetchColumn() > 0;
 }
+
+// Product Gallery functions
+function product_images_find(int $productId): array {
+    $stmt = db()->prepare("SELECT * FROM product_images WHERE product_id = :pid ORDER BY sort_order ASC, id ASC");
+    $stmt->execute(["pid" => $productId]);
+    return $stmt->fetchAll();
+}
+
+function product_image_find(int $id): ?array {
+    $stmt = db()->prepare("SELECT * FROM product_images WHERE id = :id LIMIT 1");
+    $stmt->execute(["id" => $id]);
+    $res = $stmt->fetch();
+    return $res ?: null;
+}
+
+function product_image_add(int $productId, string $imagePath, int $sortOrder = 0): int {
+    $stmt = db()->prepare("INSERT INTO product_images (product_id, image_path, sort_order) VALUES (:pid, :path, :so)");
+    $stmt->execute(["pid" => $productId, "path" => $imagePath, "so" => $sortOrder]);
+    return (int) db()->lastInsertId();
+}
+
+function product_image_delete(int $imageId): void {
+    $img = product_image_find($imageId);
+    if ($img) {
+        delete_product_image($img["image_path"]);
+        $stmt = db()->prepare("DELETE FROM product_images WHERE id = :id");
+        $stmt->execute(["id" => $imageId]);
+    }
+}
+
+function product_images_delete_by_product(int $productId): void {
+    $images = product_images_find($productId);
+    foreach ($images as $img) {
+        delete_product_image($img["image_path"]);
+    }
+    $stmt = db()->prepare("DELETE FROM product_images WHERE product_id = :pid");
+    $stmt->execute(["pid" => $productId]);
+}
+

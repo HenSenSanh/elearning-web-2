@@ -261,7 +261,7 @@ try {
                     ]);
                     break;
                 }
-                product_create([
+                $newProdId = product_create([
                     "category_id"=>(int)$_POST["category_id"],
                     "brand_id"=>((int)($_POST["brand_id"] ?? 0)) ?: null,
                     "name"=>trim($_POST["name"]),
@@ -272,6 +272,12 @@ try {
                     "image_path"=>$imagePath,
                     "status"=>isset($_POST["status"])?1:0
                 ]);
+                if (!empty($_FILES["gallery_images"])) {
+                    $galleryPaths = upload_product_gallery_images($_FILES["gallery_images"]);
+                    foreach ($galleryPaths as $gPath) {
+                        product_image_add($newProdId, $gPath);
+                    }
+                }
                 set_flash("success", "Thêm sản phẩm thành công.");
                 redirect("/products");
             }
@@ -317,10 +323,34 @@ try {
                     "image_path"=>$imagePath,
                     "status"=>isset($_POST["status"])?1:0
                 ]);
+                if (!empty($_FILES["gallery_images"])) {
+                    $galleryPaths = upload_product_gallery_images($_FILES["gallery_images"]);
+                    foreach ($galleryPaths as $gPath) {
+                        product_image_add($id, $gPath);
+                    }
+                }
                 set_flash("success", "Cập nhật sản phẩm thành công.");
-                redirect("/products");
+                redirect("/products/edit?id=" . $id);
             }
-            view("products/edit", ["title"=>"Sửa sản phẩm","categories"=>category_active_all(),"brands"=>brand_active_all(),"product"=>$product,"errors"=>[]]);
+            view("products/edit", [
+                "title"=>"Sửa sản phẩm",
+                "categories"=>category_active_all(),
+                "brands"=>brand_active_all(),
+                "product"=>$product,
+                "galleryImages"=>product_images_find($id),
+                "errors"=>[]
+            ]);
+            break;
+
+        case "/products/delete-image":
+            require_admin(); verify_csrf();
+            $imgId = (int)($_POST["image_id"] ?? 0);
+            $prodId = (int)($_POST["product_id"] ?? 0);
+            if ($imgId > 0) {
+                product_image_delete($imgId);
+                set_flash("success", "Đã xóa hình ảnh khỏi bộ sưu tập.");
+            }
+            redirect("/products/edit?id=" . $prodId);
             break;
 
         case "/products/delete":

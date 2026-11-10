@@ -43,6 +43,28 @@ function upload_product_image(array $file): ?string {
     if (!move_uploaded_file($file["tmp_name"], $dir . "/" . $name)) throw new RuntimeException("Không thể lưu hình ảnh.");
     return "uploads/products/" . $name;
 }
+
+function upload_product_gallery_images(array $files): array {
+    $paths = [];
+    if (!isset($files["name"]) || !is_array($files["name"])) return $paths;
+    $count = count($files["name"]);
+    for ($i = 0; $i < $count; $i++) {
+        if ($files["error"][$i] === UPLOAD_ERR_NO_FILE) continue;
+        $file = [
+            "name" => $files["name"][$i],
+            "type" => $files["type"][$i],
+            "tmp_name" => $files["tmp_name"][$i],
+            "error" => $files["error"][$i],
+            "size" => $files["size"][$i]
+        ];
+        $path = upload_product_image($file);
+        if ($path) {
+            $paths[] = $path;
+        }
+    }
+    return $paths;
+}
+
 function delete_product_image(?string $imagePath): void {
     if (!$imagePath) return;
     $fullPath = __DIR__ . "/../public/" . $imagePath;
