@@ -5,6 +5,7 @@ require_once __DIR__ . "/../src/brand_repository.php";
 require_once __DIR__ . "/../src/inventory_repository.php";
 require_once __DIR__ . "/../src/customer_repository.php";
 require_once __DIR__ . "/../src/order_repository.php";
+require_once __DIR__ . "/../src/export_service.php";
 require_once __DIR__ . "/../src/product_repository.php";
 
 $path = rtrim(parse_url($_SERVER["REQUEST_URI"], PHP_URL_PATH), "/");
@@ -454,6 +455,25 @@ try {
                 set_flash("error", "Lỗi: " . $e->getMessage());
             }
             redirect("/orders/detail?id=" . $id);
+            break;
+
+        case "/inventory/export":
+            require_admin();
+            export_inventory_csv(inventory_log_all());
+            break;
+
+        case "/orders/export":
+            require_admin();
+            export_orders_csv(order_all());
+            break;
+
+        case "/products/export":
+            require_admin();
+            $keyword = trim($_GET["keyword"] ?? "");
+            $categoryId = (int)($_GET["category_id"] ?? 0);
+            $brandId = (int)($_GET["brand_id"] ?? 0);
+            $pagination = product_paginate($keyword, $categoryId, 1, 10000, $brandId);
+            export_products_csv($pagination["items"]);
             break;
 
         case "/products":

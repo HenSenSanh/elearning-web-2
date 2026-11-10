@@ -13,6 +13,7 @@ require_once __DIR__ . "/../src/brand_repository.php";
 require_once __DIR__ . "/../src/inventory_repository.php";
 require_once __DIR__ . "/../src/customer_repository.php";
 require_once __DIR__ . "/../src/order_repository.php";
+require_once __DIR__ . "/../src/export_service.php";
 require_once __DIR__ . "/../src/product_repository.php";
 
 $passed = 0;
@@ -358,6 +359,18 @@ assert_test("3E.4 Cancelling order restores product stock (7 + 3 = 10)", (int)$p
 // Cleanup
 db()->prepare("DELETE FROM orders WHERE id = :id")->execute(["id" => $orderId]);
 product_delete($orderProdId);
+
+// --- MODULE 3F: CSV / EXCEL EXPORT SERVICE ---
+echo "\n--- MODULE 3F: CSV / EXCEL EXPORT SERVICE ---\n";
+$testHeaders = ["Mã SKU", "Tên sản phẩm", "Đơn giá", "Số lượng"];
+$testRows = [
+    ["LAP-TEST-01", "Laptop Dell Tiếng Việt Có Dấu", "15000000", "5"],
+    ["PHONE-TEST-02", "Điện thoại thông minh, phiên bản 2", "20000000", "10"]
+];
+$csvOutput = generate_csv_string($testHeaders, $testRows);
+assert_test("3F.1 CSV output begins with UTF-8 BOM", str_starts_with($csvOutput, "\xEF\xBB\xBF"));
+assert_test("3F.2 CSV output preserves UTF-8 Vietnamese and handles comma/quotes", strpos($csvOutput, "Laptop Dell Tiếng Việt Có Dấu") !== false && strpos($csvOutput, '"Điện thoại thông minh, phiên bản 2"') !== false);
+
 
 
 
