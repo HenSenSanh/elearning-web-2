@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . "/../src/auth.php";
 require_once __DIR__ . "/../src/category_repository.php";
+require_once __DIR__ . "/../src/brand_repository.php";
 require_once __DIR__ . "/../src/product_repository.php";
 
 $path = rtrim(parse_url($_SERVER["REQUEST_URI"], PHP_URL_PATH), "/");
@@ -139,19 +140,102 @@ try {
             redirect("/categories");
             break;
 
+        case "/brands":
+            require_admin();
+            view("brands/index", ["title"=>"Quản lý thương hiệu","brands"=>brand_all()]);
+            break;
+
+        case "/brands/create":
+            require_admin();
+            if (is_post()) {
+                verify_csrf();
+                $name = trim($_POST["name"] ?? "");
+                $description = trim($_POST["description"] ?? "");
+                $status = isset($_POST["status"]) ? 1 : 0;
+                $error = "";
+                if ($name === "") {
+                    $error = "Tên thương hiệu không được để trống.";
+                } elseif (brand_exists_name($name)) {
+                    $error = "Tên thương hiệu đã tồn tại, vui lòng chọn tên khác.";
+                }
+                if ($error !== "") {
+                    view("brands/create", [
+                        "title" => "Thêm thương hiệu",
+                        "error" => $error,
+                        "brand" => ["name" => $name, "description" => $description, "status" => $status]
+                    ]);
+                    break;
+                }
+                brand_create($name, $description, $status);
+                set_flash("success", "Thêm thương hiệu thành công.");
+                redirect("/brands");
+            }
+            view("brands/create", ["title"=>"Thêm thương hiệu","error"=>""]);
+            break;
+
+        case "/brands/edit":
+            require_admin();
+            $id = (int)($_GET["id"] ?? 0);
+            $brand = brand_find($id);
+            if (!$brand) { http_response_code(404); die("Không tìm thấy thương hiệu."); }
+            if (is_post()) {
+                verify_csrf();
+                $name = trim($_POST["name"] ?? "");
+                $description = trim($_POST["description"] ?? "");
+                $status = isset($_POST["status"]) ? 1 : 0;
+                $error = "";
+                if ($name === "") {
+                    $error = "Tên thương hiệu không được để trống.";
+                } elseif (brand_exists_name($name, $id)) {
+                    $error = "Tên thương hiệu đã tồn tại, vui lòng chọn tên khác.";
+                }
+                if ($error !== "") {
+                    view("brands/edit", [
+                        "title" => "Sửa thương hiệu",
+                        "brand" => ["id" => $id, "name" => $name, "description" => $description, "status" => $status],
+                        "error" => $error
+                    ]);
+                    break;
+                }
+                brand_update($id, $name, $description, $status);
+                set_flash("success", "Cập nhật thương hiệu thành công.");
+                redirect("/brands");
+            }
+            view("brands/edit", ["title"=>"Sửa thương hiệu","brand"=>$brand,"error"=>""]);
+            break;
+
+        case "/brands/delete":
+            require_admin(); verify_csrf();
+            $id = (int)($_POST["id"] ?? 0);
+            if (brand_has_products($id)) {
+                set_flash("error", "Không thể xóa thương hiệu này vì vẫn còn sản phẩm thuộc thương hiệu.");
+            } else {
+                try {
+                    brand_delete($id);
+                    set_flash("success", "Xóa thương hiệu thành công.");
+                } catch (PDOException $e) {
+                    set_flash("error", "Lỗi khi xóa thương hiệu: Ràng buộc cơ sở dữ liệu.");
+                }
+            }
+            redirect("/brands");
+            break;
+
         case "/products":
             require_admin();
             $keyword = trim($_GET["keyword"] ?? "");
             $categoryId = (int)($_GET["category_id"] ?? 0);
+            $brandId = (int)($_GET["brand_id"] ?? 0);
             $page = max(1, (int)($_GET["page"] ?? 1));
             $perPage = 5;
-            $pagination = product_paginate($keyword, $categoryId, $page, $perPage);
+            $pagination = product_paginate($keyword, $categoryId, $page, $perPage, $brandId);
             view("products/index", [
                 "title" => "Quản lý sản phẩm",
                 "products" => $pagination["items"],
                 "categories" => category_all(),
+                "brands" => brand_all(),
                 "keyword" => $keyword,
                 "categoryId" => $categoryId,
+                "brandId" => $brandId,
                 "pagination" => $pagination,
             ]);
             break;
@@ -171,6 +255,7 @@ try {
                     view("products/create", [
                         "title" => "Thêm sản phẩm",
                         "categories" => category_active_all(),
+                        "brands" => brand_active_all(),
                         "errors" => $errors,
                         "old" => $_POST
                     ]);
@@ -178,6 +263,7 @@ try {
                 }
                 product_create([
                     "category_id"=>(int)$_POST["category_id"],
+                    "brand_id"=>((int)($_POST["brand_id"] ?? 0)) ?: null,
                     "name"=>trim($_POST["name"]),
                     "sku"=>trim($_POST["sku"] ?? "") ?: null,
                     "description"=>trim($_POST["description"] ?? ""),
@@ -189,7 +275,7 @@ try {
                 set_flash("success", "Thêm sản phẩm thành công.");
                 redirect("/products");
             }
-            view("products/create", ["title"=>"Thêm sản phẩm","categories"=>category_active_all(),"errors"=>[],"old"=>[]]);
+            view("products/create", ["title"=>"Thêm sản phẩm","categories"=>category_active_all(),"brands"=>brand_active_all(),"errors"=>[],"old"=>[]]);
             break;
 
         case "/products/edit":
@@ -214,6 +300,7 @@ try {
                     view("products/edit", [
                         "title" => "Sửa sản phẩm",
                         "categories" => category_active_all(),
+                        "brands" => brand_active_all(),
                         "product" => $mergedProduct,
                         "errors" => $errors
                     ]);
@@ -221,6 +308,7 @@ try {
                 }
                 product_update($id, [
                     "category_id"=>(int)$_POST["category_id"],
+                    "brand_id"=>((int)($_POST["brand_id"] ?? 0)) ?: null,
                     "name"=>trim($_POST["name"]),
                     "sku"=>trim($_POST["sku"] ?? "") ?: null,
                     "description"=>trim($_POST["description"] ?? ""),
@@ -232,7 +320,7 @@ try {
                 set_flash("success", "Cập nhật sản phẩm thành công.");
                 redirect("/products");
             }
-            view("products/edit", ["title"=>"Sửa sản phẩm","categories"=>category_active_all(),"product"=>$product,"errors"=>[]]);
+            view("products/edit", ["title"=>"Sửa sản phẩm","categories"=>category_active_all(),"brands"=>brand_active_all(),"product"=>$product,"errors"=>[]]);
             break;
 
         case "/products/delete":

@@ -1,4 +1,7 @@
-<div class="page-actions"><a class="btn primary" href="/products/create">+ Thêm sản phẩm</a></div>
+<div class="page-actions">
+    <a class="btn primary" href="/products/create">+ Thêm sản phẩm</a>
+    <a class="btn secondary" href="/products/export?<?= http_build_query($_GET) ?>">📥 Xuất CSV</a>
+</div>
 <?php if ($msg = get_flash("error")): ?><div class="alert error"><?= e($msg) ?></div><?php endif; ?>
 <?php if ($msg = get_flash("success")): ?><div class="alert success"><?= e($msg) ?></div><?php endif; ?>
 <div class="panel filter-panel">
@@ -10,12 +13,18 @@
 <option value="<?= e($category["id"]) ?>" <?= (int)$categoryId === (int)$category["id"] ? "selected" : "" ?>><?= e($category["name"]) ?></option>
 <?php endforeach; ?>
 </select>
+<select name="brand_id">
+<option value="0">Tất cả thương hiệu</option>
+<?php foreach ($brands as $brand): ?>
+<option value="<?= e($brand["id"]) ?>" <?= (int)($brandId ?? 0) === (int)$brand["id"] ? "selected" : "" ?>><?= e($brand["name"]) ?></option>
+<?php endforeach; ?>
+</select>
 <button class="btn secondary" type="submit">Tìm kiếm</button>
 </form>
 </div>
 <div class="panel">
 <table class="table product-table">
-<thead><tr><th>Hình</th><th>Thông tin sản phẩm</th><th>Danh mục</th><th>SL</th><th>Đơn giá</th><th>Trạng thái</th><th width="180">Thao tác</th></tr></thead>
+<thead><tr><th>Hình</th><th>Thông tin sản phẩm</th><th>Danh mục / Hãng</th><th>SL</th><th>Đơn giá</th><th>Trạng thái</th><th width="180">Thao tác</th></tr></thead>
 <tbody>
 <?php foreach ($products as $product): ?>
 <tr>
@@ -24,7 +33,12 @@
 <?php else: ?><div class="no-image">No image</div><?php endif; ?>
 </td>
 <td><strong><?= e($product["name"]) ?></strong><small>SKU: <?= e($product["sku"] ?: "N/A") ?></small><small><?= e($product["description"]) ?></small></td>
-<td><?= e($product["category_name"]) ?></td>
+<td>
+    <div><span class="badge secondary"><?= e($product["category_name"]) ?></span></div>
+    <?php if (!empty($product["brand_name"])): ?>
+        <div style="margin-top: 4px;"><span class="badge info"><?= e($product["brand_name"]) ?></span></div>
+    <?php endif; ?>
+</td>
 <td><?= number_format((int)$product["quantity"]) ?></td>
 <td><?= number_format((float)$product["unit_price"], 0, ',', '.') ?> đ</td>
 <td><span class="badge <?= $product["status"] ? 'success' : 'muted' ?>"><?= $product["status"] ? "Hiển thị" : "Ẩn" ?></span></td>
@@ -58,12 +72,6 @@
             <a class="page-link" href="/products?<?= http_build_query(array_merge($_GET, ['page' => $pagination["currentPage"] + 1])) ?>">Sau ›</a>
             <a class="page-link" href="/products?<?= http_build_query(array_merge($_GET, ['page' => $pagination["totalPages"]])) ?>">Cuối »</a>
         <?php endif; ?>
-    </div>
-</div>
-<?php elseif (!empty($pagination)): ?>
-<div class="pagination-wrapper">
-    <div class="pagination-info">
-        Tổng số: <strong><?= (int)$pagination["totalItems"] ?></strong> sản phẩm
     </div>
 </div>
 <?php endif; ?>

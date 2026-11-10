@@ -9,6 +9,7 @@ require_once __DIR__ . "/../src/db.php";
 require_once __DIR__ . "/../src/helpers.php";
 require_once __DIR__ . "/../src/auth.php";
 require_once __DIR__ . "/../src/category_repository.php";
+require_once __DIR__ . "/../src/brand_repository.php";
 require_once __DIR__ . "/../src/product_repository.php";
 
 $passed = 0;
@@ -82,6 +83,39 @@ assert_test("2.5 Has-products check detects products under 'Laptop'", $hasProduc
 category_delete((int)$newCategory["id"]);
 $deletedCheck = category_find((int)$newCategory["id"]);
 assert_test("2.6 Delete category without products succeeds", $deletedCheck === null);
+
+// --- MODULE 2B: BRAND MANAGEMENT ---
+echo "\n--- MODULE 2B: BRAND MANAGEMENT ---\n";
+// Test 2B.1: Existing brand detected
+$existsBrand = brand_exists_name("Dell");
+assert_test("2B.1 Existing brand 'Dell' detected", $existsBrand === true);
+
+// Test 2B.2: Create brand
+$testBrandName = "Test Brand " . time();
+brand_create($testBrandName, "Mô tả hãng test", 1);
+$stmtB = db()->prepare("SELECT * FROM brands WHERE name = :n");
+$stmtB->execute(["n" => $testBrandName]);
+$newBrand = $stmtB->fetch();
+assert_test("2B.2 Create brand successfully", !empty($newBrand) && $newBrand["name"] === $testBrandName);
+
+// Test 2B.3: Duplicate brand name detected
+$dupBrandCheck = brand_exists_name($testBrandName);
+assert_test("2B.3 Duplicate brand name detected", $dupBrandCheck === true);
+
+// Test 2B.4: Update brand
+$updatedBrandName = $testBrandName . " Pro";
+brand_update((int)$newBrand["id"], $updatedBrandName, "Mô tả brand cập nhật", 1);
+$refreshedBrand = brand_find((int)$newBrand["id"]);
+assert_test("2B.4 Update brand successfully", $refreshedBrand["name"] === $updatedBrandName);
+
+// Test 2B.5: Has-products check on Dell
+$dellBrand = db()->query("SELECT id FROM brands WHERE name = 'Dell' LIMIT 1")->fetch();
+assert_test("2B.5 Has-products detects products under Dell", brand_has_products((int)$dellBrand["id"]) === true);
+
+// Test 2B.6: Delete brand without products succeeds
+brand_delete((int)$newBrand["id"]);
+$deletedBrandCheck = brand_find((int)$newBrand["id"]);
+assert_test("2B.6 Delete brand without products succeeds", $deletedBrandCheck === null);
 
 
 // --- MODULE 3: PRODUCT VALIDATION & MANAGEMENT ---
