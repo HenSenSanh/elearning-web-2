@@ -3,6 +3,7 @@ require_once __DIR__ . "/../src/auth.php";
 require_once __DIR__ . "/../src/category_repository.php";
 require_once __DIR__ . "/../src/brand_repository.php";
 require_once __DIR__ . "/../src/inventory_repository.php";
+require_once __DIR__ . "/../src/customer_repository.php";
 require_once __DIR__ . "/../src/product_repository.php";
 
 $path = rtrim(parse_url($_SERVER["REQUEST_URI"], PHP_URL_PATH), "/");
@@ -264,12 +265,102 @@ try {
                 break;
             }
             $products = db()->query("SELECT id, name, quantity FROM products ORDER BY name ASC")->fetchAll();
-            view("inventory/create", [
-                "title" => "Tạo phiếu Nhập / Xuất kho",
-                "products" => $products,
-                "error" => "",
-                "old" => []
+            break;
+
+        case "/customers":
+            require_admin();
+            $keyword = trim($_GET["keyword"] ?? "");
+            $page = max(1, (int)($_GET["page"] ?? 1));
+            $pagination = customer_paginate($keyword, $page, 10);
+            view("customers/index", [
+                "title" => "Quản lý khách hàng",
+                "customers" => $pagination["items"],
+                "keyword" => $keyword,
+                "pagination" => $pagination
             ]);
+            break;
+
+        case "/customers/create":
+            require_admin();
+            if (is_post()) {
+                verify_csrf();
+                $name = trim($_POST["name"] ?? "");
+                $email = trim($_POST["email"] ?? "");
+                $phone = trim($_POST["phone"] ?? "");
+                $address = trim($_POST["address"] ?? "");
+                $status = isset($_POST["status"]) ? 1 : 0;
+                $error = "";
+                if ($name === "") $error = "Họ tên khách hàng không được để trống.";
+                elseif ($email === "" || !filter_var($email, FILTER_VALIDATE_EMAIL)) $error = "Email không hợp lệ.";
+                elseif (customer_exists_email($email)) $error = "Email này đã được sử dụng.";
+                if ($error !== "") {
+                    view("customers/create", [
+                        "title" => "Thêm khách hàng",
+                        "error" => $error,
+                        "old" => $_POST
+                    ]);
+                    break;
+                }
+                customer_create([
+                    "name" => $name,
+                    "email" => $email,
+                    "phone" => $phone,
+                    "address" => $address,
+                    "status" => $status
+                ]);
+                set_flash("success", "Thêm khách hàng thành công.");
+                redirect("/customers");
+            }
+            view("customers/create", ["title" => "Thêm khách hàng", "error" => "", "old" => []]);
+            break;
+
+        case "/customers/edit":
+            require_admin();
+            $id = (int)($_GET["id"] ?? 0);
+            $customer = customer_find($id);
+            if (!$customer) { http_response_code(404); die("Không tìm thấy khách hàng."); }
+            if (is_post()) {
+                verify_csrf();
+                $name = trim($_POST["name"] ?? "");
+                $email = trim($_POST["email"] ?? "");
+                $phone = trim($_POST["phone"] ?? "");
+                $address = trim($_POST["address"] ?? "");
+                $status = isset($_POST["status"]) ? 1 : 0;
+                $error = "";
+                if ($name === "") $error = "Họ tên khách hàng không được để trống.";
+                elseif ($email === "" || !filter_var($email, FILTER_VALIDATE_EMAIL)) $error = "Email không hợp lệ.";
+                elseif (customer_exists_email($email, $id)) $error = "Email này đã được khách hàng khác sử dụng.";
+                if ($error !== "") {
+                    view("customers/edit", [
+                        "title" => "Sửa khách hàng",
+                        "error" => $error,
+                        "customer" => array_merge($customer, $_POST)
+                    ]);
+                    break;
+                }
+                customer_update($id, [
+                    "name" => $name,
+                    "email" => $email,
+                    "phone" => $phone,
+                    "address" => $address,
+                    "status" => $status
+                ]);
+                set_flash("success", "Cập nhật khách hàng thành công.");
+                redirect("/customers");
+            }
+            view("customers/edit", ["title" => "Sửa khách hàng", "customer" => $customer, "error" => ""]);
+            break;
+
+        case "/customers/delete":
+            require_admin(); verify_csrf();
+            $id = (int)($_POST["id"] ?? 0);
+            try {
+                customer_delete($id);
+                set_flash("success", "Xóa khách hàng thành công.");
+            } catch (PDOException $e) {
+                set_flash("error", "Không thể xóa khách hàng do có đơn hàng liên kết.");
+            }
+            redirect("/customers");
             break;
 
         case "/products":

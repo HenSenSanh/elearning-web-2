@@ -11,6 +11,7 @@ require_once __DIR__ . "/../src/auth.php";
 require_once __DIR__ . "/../src/category_repository.php";
 require_once __DIR__ . "/../src/brand_repository.php";
 require_once __DIR__ . "/../src/inventory_repository.php";
+require_once __DIR__ . "/../src/customer_repository.php";
 require_once __DIR__ . "/../src/product_repository.php";
 
 $passed = 0;
@@ -274,6 +275,43 @@ assert_test("3C.4 Paginate logs finds records", count($logsResult["items"]) >= 2
 
 // Cleanup
 product_delete($invProdId);
+
+// --- MODULE 3D: CUSTOMER MANAGEMENT ---
+echo "\n--- MODULE 3D: CUSTOMER MANAGEMENT ---\n";
+// Test 3D.1: Existing email detected
+assert_test("3D.1 Existing customer email 'vana@example.com' detected", customer_exists_email("vana@example.com") === true);
+
+// Test 3D.2: Create customer
+$testCustEmail = "testcust" . time() . "@example.com";
+$custId = customer_create([
+    "name" => "Khách hàng Test",
+    "email" => $testCustEmail,
+    "phone" => "0999888777",
+    "address" => "123 Đường Test",
+    "status" => 1
+]);
+$foundCust = customer_find($custId);
+assert_test("3D.2 Create customer successfully", !empty($foundCust) && $foundCust["email"] === $testCustEmail);
+
+// Test 3D.3: Update customer
+customer_update($custId, [
+    "name" => "Khách hàng Đã Sửa",
+    "email" => $testCustEmail,
+    "phone" => "0999111222",
+    "address" => "456 Đường Mới",
+    "status" => 0
+]);
+$updatedCust = customer_find($custId);
+assert_test("3D.3 Update customer successfully", $updatedCust["name"] === "Khách hàng Đã Sửa" && (int)$updatedCust["status"] === 0);
+
+// Test 3D.4: Search / paginate customers
+$custPages = customer_paginate("Đã Sửa", 1, 10);
+assert_test("3D.4 Paginate and search customers", count($custPages["items"]) >= 1);
+
+// Test 3D.5: Delete customer
+customer_delete($custId);
+assert_test("3D.5 Delete customer successfully", customer_find($custId) === null);
+
 
 
 
