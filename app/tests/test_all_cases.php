@@ -12,6 +12,7 @@ require_once __DIR__ . "/../src/category_repository.php";
 require_once __DIR__ . "/../src/brand_repository.php";
 require_once __DIR__ . "/../src/inventory_repository.php";
 require_once __DIR__ . "/../src/customer_repository.php";
+require_once __DIR__ . "/../src/order_repository.php";
 require_once __DIR__ . "/../src/product_repository.php";
 
 $passed = 0;
@@ -311,6 +312,53 @@ assert_test("3D.4 Paginate and search customers", count($custPages["items"]) >= 
 // Test 3D.5: Delete customer
 customer_delete($custId);
 assert_test("3D.5 Delete customer successfully", customer_find($custId) === null);
+
+// --- MODULE 3E: ORDER MANAGEMENT ---
+echo "\n--- MODULE 3E: ORDER MANAGEMENT ---\n";
+$orderProdId = product_create([
+    "category_id" => (int)$laptopCat["id"],
+    "brand_id" => (int)$dellBrand["id"],
+    "name" => "Order Test Laptop",
+    "sku" => "TEST-ORD-" . time(),
+    "description" => "Test orders",
+    "quantity" => 10,
+    "unit_price" => 10000000,
+    "image_path" => null,
+    "status" => 1
+]);
+
+// Test 3E.1: Create order with stock deduction
+$orderId = order_create(1, [
+    ["product_id" => $orderProdId, "quantity" => 3]
+], "Đơn hàng test TDD");
+$order = order_find($orderId);
+$prodAfterOrder = product_find($orderProdId);
+assert_test("3E.1 Create order creates record & deducts stock (10 - 3 = 7)", !empty($order) && (float)$order["total_amount"] == 30000000 && (int)$prodAfterOrder["quantity"] === 7);
+
+// Test 3E.2: Verify order items
+$items = order_items_find($orderId);
+assert_test("3E.2 Order line items saved accurately", count($items) === 1 && (int)$items[0]["quantity"] === 3 && (float)$items[0]["subtotal"] == 30000000);
+
+// Test 3E.3: Cannot order more than available stock
+$outOfStockCaught = false;
+try {
+    order_create(1, [
+        ["product_id" => $orderProdId, "quantity" => 50]
+    ], "Đơn hàng vượt tồn kho");
+} catch (RuntimeException $e) {
+    $outOfStockCaught = true;
+}
+assert_test("3E.3 Insufficient stock rejected on order creation", $outOfStockCaught === true);
+
+// Test 3E.4: Cancel order restores stock
+order_update_status($orderId, "cancelled");
+$prodAfterCancel = product_find($orderProdId);
+assert_test("3E.4 Cancelling order restores product stock (7 + 3 = 10)", (int)$prodAfterCancel["quantity"] === 10);
+
+// Cleanup
+db()->prepare("DELETE FROM orders WHERE id = :id")->execute(["id" => $orderId]);
+product_delete($orderProdId);
+
 
 
 

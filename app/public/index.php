@@ -4,6 +4,7 @@ require_once __DIR__ . "/../src/category_repository.php";
 require_once __DIR__ . "/../src/brand_repository.php";
 require_once __DIR__ . "/../src/inventory_repository.php";
 require_once __DIR__ . "/../src/customer_repository.php";
+require_once __DIR__ . "/../src/order_repository.php";
 require_once __DIR__ . "/../src/product_repository.php";
 
 $path = rtrim(parse_url($_SERVER["REQUEST_URI"], PHP_URL_PATH), "/");
@@ -361,6 +362,98 @@ try {
                 set_flash("error", "Không thể xóa khách hàng do có đơn hàng liên kết.");
             }
             redirect("/customers");
+            break;
+
+        case "/orders":
+            require_admin();
+            $status = trim($_GET["status"] ?? "");
+            $keyword = trim($_GET["keyword"] ?? "");
+            $page = max(1, (int)($_GET["page"] ?? 1));
+            $pagination = order_paginate($status, $keyword, $page, 10);
+            view("orders/index", [
+                "title" => "Quản lý đơn hàng",
+                "orders" => $pagination["items"],
+                "status" => $status,
+                "keyword" => $keyword,
+                "pagination" => $pagination
+            ]);
+            break;
+
+        case "/orders/create":
+            require_admin();
+            if (is_post()) {
+                verify_csrf();
+                $customerId = (int)($_POST["customer_id"] ?? 0);
+                $notes = trim($_POST["notes"] ?? "");
+                $rawItems = $_POST["items"] ?? [];
+                $items = [];
+                foreach ($rawItems as $raw) {
+                    $pid = (int)($raw["product_id"] ?? 0);
+                    $qty = (int)($raw["quantity"] ?? 0);
+                    if ($pid > 0 && $qty > 0) {
+                        $items[] = ["product_id" => $pid, "quantity" => $qty];
+                    }
+                }
+
+                $error = "";
+                if ($customerId <= 0) $error = "Vui lòng chọn khách hàng đặt mua.";
+                elseif (empty($items)) $error = "Vui lòng chọn ít nhất một sản phẩm hợp lệ.";
+
+                if ($error === "") {
+                    try {
+                        $orderId = order_create($customerId, $items, $notes);
+                        set_flash("success", "Tạo đơn hàng thành công.");
+                        redirect("/orders/detail?id=" . $orderId);
+                    } catch (Throwable $e) {
+                        $error = $e->getMessage();
+                    }
+                }
+                $customers = customer_active_all();
+                $products = db()->query("SELECT id, name, unit_price, quantity FROM products WHERE status = 1 ORDER BY name ASC")->fetchAll();
+                view("orders/create", [
+                    "title" => "Tạo đơn hàng mới",
+                    "customers" => $customers,
+                    "products" => $products,
+                    "error" => $error,
+                    "old" => $_POST
+                ]);
+                break;
+            }
+            $customers = customer_active_all();
+            $products = db()->query("SELECT id, name, unit_price, quantity FROM products WHERE status = 1 ORDER BY name ASC")->fetchAll();
+            view("orders/create", [
+                "title" => "Tạo đơn hàng mới",
+                "customers" => $customers,
+                "products" => $products,
+                "error" => "",
+                "old" => []
+            ]);
+            break;
+
+        case "/orders/detail":
+            require_admin();
+            $id = (int)($_GET["id"] ?? 0);
+            $order = order_find($id);
+            if (!$order) { http_response_code(404); die("Không tìm thấy đơn hàng."); }
+            $items = order_items_find($id);
+            view("orders/detail", [
+                "title" => "Chi tiết đơn hàng " . $order["order_code"],
+                "order" => $order,
+                "items" => $items
+            ]);
+            break;
+
+        case "/orders/update-status":
+            require_admin(); verify_csrf();
+            $id = (int)($_POST["id"] ?? 0);
+            $newStatus = trim($_POST["status"] ?? "");
+            try {
+                order_update_status($id, $newStatus);
+                set_flash("success", "Cập nhật trạng thái đơn hàng thành công.");
+            } catch (Throwable $e) {
+                set_flash("error", "Lỗi: " . $e->getMessage());
+            }
+            redirect("/orders/detail?id=" . $id);
             break;
 
         case "/products":
