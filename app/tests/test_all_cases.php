@@ -15,6 +15,7 @@ require_once __DIR__ . "/../src/customer_repository.php";
 require_once __DIR__ . "/../src/order_repository.php";
 require_once __DIR__ . "/../src/export_service.php";
 require_once __DIR__ . "/../src/activity_log_repository.php";
+require_once __DIR__ . "/../src/password_reset_repository.php";
 require_once __DIR__ . "/../src/product_repository.php";
 
 $passed = 0;
@@ -377,6 +378,33 @@ echo "\n--- MODULE 3G: ADMIN ACTIVITY LOGS ---\n";
 log_activity(1, "TEST_ACTION", "Thực hiện thao tác thử nghiệm trên hệ thống", "127.0.0.1");
 $logsResult = activity_log_paginate(1, 5);
 assert_test("3G.1 Activity log records created and retrievable", count($logsResult["items"]) >= 1 && $logsResult["items"][0]["action"] === "TEST_ACTION");
+
+// --- MODULE 3H: PASSWORD RESET VIA EMAIL ---
+echo "\n--- MODULE 3H: PASSWORD RESET VIA EMAIL ---\n";
+// Test 3H.1: Generate reset token
+$resetToken = password_reset_create_token("admin@example.com");
+assert_test("3H.1 Generate 64-character reset token", !empty($resetToken) && strlen($resetToken) === 64);
+
+// Test 3H.2: Verify valid token
+$verifiedReset = password_reset_verify_token($resetToken);
+assert_test("3H.2 Verify active reset token", !empty($verifiedReset) && $verifiedReset["email"] === "admin@example.com");
+
+// Test 3H.3: Apply password reset
+$applied = password_reset_apply($resetToken, "temporary_pass_123");
+assert_test("3H.3 Apply password reset with BCRYPT hash", $applied === true);
+
+// Test 3H.4: Login with updated password
+$loginWithNew = admin_login("admin", "temporary_pass_123");
+assert_test("3H.4 Login with new password succeeds", $loginWithNew["success"] === true);
+
+// Test 3H.5: Used token is revoked
+$checkUsedToken = password_reset_verify_token($resetToken);
+assert_test("3H.5 Used token is invalidated", $checkUsedToken === null);
+
+// Reset password back to default "admin123" for subsequent tests
+$restoreToken = password_reset_create_token("admin@example.com");
+password_reset_apply($restoreToken, "admin123");
+
 
 
 

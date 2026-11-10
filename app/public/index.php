@@ -7,6 +7,7 @@ require_once __DIR__ . "/../src/customer_repository.php";
 require_once __DIR__ . "/../src/order_repository.php";
 require_once __DIR__ . "/../src/export_service.php";
 require_once __DIR__ . "/../src/activity_log_repository.php";
+require_once __DIR__ . "/../src/password_reset_repository.php";
 require_once __DIR__ . "/../src/product_repository.php";
 
 $path = rtrim(parse_url($_SERVER["REQUEST_URI"], PHP_URL_PATH), "/");
@@ -57,6 +58,76 @@ try {
         case "/logout":
             log_activity($_SESSION["admin_id"] ?? null, "LOGOUT", "Đăng xuất khỏi hệ thống");
             admin_logout(); break;
+
+        case "/forgot-password":
+            if (is_post()) {
+                verify_csrf();
+                $email = trim($_POST["email"] ?? "");
+                $error = "";
+                $success = "";
+                $resetLink = "";
+                try {
+                    $token = password_reset_create_token($email);
+                    $config = require __DIR__ . "/../src/config.php";
+                    $resetLink = rtrim($config["app"]["url"], "/") . "/reset-password?token=" . $token;
+                    $success = "Yêu cầu đặt lại mật khẩu đã được xử lý. Nhấp vào liên kết bên dưới để tạo mật khẩu mới:";
+                    log_activity(null, "FORGOT_PASSWORD_REQUEST", "Yêu cầu đặt lại mật khẩu cho " . $email);
+                } catch (Throwable $e) {
+                    $error = $e->getMessage();
+                }
+                view("auth/forgot_password", [
+                    "title" => "Quên mật khẩu",
+                    "error" => $error,
+                    "success" => $success,
+                    "resetLink" => $resetLink,
+                    "email" => $email
+                ]);
+                break;
+            }
+            view("auth/forgot_password", ["title" => "Quên mật khẩu", "error" => "", "success" => "", "resetLink" => ""]);
+            break;
+
+        case "/reset-password":
+            $token = trim($_GET["token"] ?? $_POST["token"] ?? "");
+            $reset = password_reset_verify_token($token);
+            if (!$reset) {
+                view("auth/login", [
+                    "title" => "Đăng nhập Admin",
+                    "error" => "Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn (chỉ có hiệu lực trong 1 giờ)."
+                ]);
+                break;
+            }
+            if (is_post()) {
+                verify_csrf();
+                $password = $_POST["password"] ?? "";
+                $passwordConfirm = $_POST["password_confirm"] ?? "";
+                $error = "";
+                if (strlen($password) < 6) {
+                    $error = "Mật khẩu mới phải có ít nhất 6 ký tự.";
+                } elseif ($password !== $passwordConfirm) {
+                    $error = "Xác nhận mật khẩu không khớp.";
+                }
+                if ($error === "") {
+                    password_reset_apply($token, $password);
+                    log_activity(null, "PASSWORD_RESET_SUCCESS", "Đặt lại mật khẩu thành công cho " . $reset["email"]);
+                    set_flash("success", "Đặt lại mật khẩu thành công! Bạn có thể đăng nhập bằng mật khẩu mới.");
+                    redirect("/login");
+                }
+                view("auth/reset_password", [
+                    "title" => "Đặt lại mật khẩu",
+                    "token" => $token,
+                    "email" => $reset["email"],
+                    "error" => $error
+                ]);
+                break;
+            }
+            view("auth/reset_password", [
+                "title" => "Đặt lại mật khẩu",
+                "token" => $token,
+                "email" => $reset["email"],
+                "error" => ""
+            ]);
+            break;
 
         case "/dashboard":
             require_admin();

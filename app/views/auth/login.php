@@ -1,7 +1,8 @@
 <div class="login-page">
     <div class="login-card">
         <h1>Admin Login</h1>
-        <p>Đăng nhập để quản lý danh mục và sản phẩm.</p>
+        <p>Đăng nhập để quản lý hệ thống sản phẩm.</p>
+        <?php if ($msg = get_flash("success")): ?><div class="alert success"><?= e($msg) ?></div><?php endif; ?>
         <?php if (!empty($error)): ?><div class="alert error"><?= e($error) ?></div><?php endif; ?>
         <form method="POST" action="/login" id="loginForm">
             <?= csrf_field() ?>
@@ -9,6 +10,9 @@
             <div class="form-group"><label>Mật khẩu</label><input type="password" name="password" id="password" placeholder="admin123"><small class="field-error" id="passwordError"></small></div>
             <button class="btn primary full" type="submit">Đăng nhập</button>
         </form>
+        <div style="margin-top: 14px; text-align: center;">
+            <a href="/forgot-password" style="font-size: 13px; color: #0284c7; text-decoration: none;">Quên mật khẩu?</a>
+        </div>
         <div class="hint">Tài khoản demo: <strong>admin</strong> / <strong>admin123</strong></div>
     </div>
 </div>
