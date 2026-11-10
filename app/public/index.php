@@ -2,6 +2,7 @@
 require_once __DIR__ . "/../src/auth.php";
 require_once __DIR__ . "/../src/category_repository.php";
 require_once __DIR__ . "/../src/brand_repository.php";
+require_once __DIR__ . "/../src/inventory_repository.php";
 require_once __DIR__ . "/../src/product_repository.php";
 
 $path = rtrim(parse_url($_SERVER["REQUEST_URI"], PHP_URL_PATH), "/");
@@ -218,6 +219,57 @@ try {
                 }
             }
             redirect("/brands");
+            break;
+
+        case "/inventory":
+            require_admin();
+            $page = max(1, (int)($_GET["page"] ?? 1));
+            $pagination = inventory_log_paginate($page, 10);
+            view("inventory/index", [
+                "title" => "Quản lý Nhập / Xuất kho",
+                "logs" => $pagination["items"],
+                "pagination" => $pagination,
+                "totalIn" => inventory_total_in(),
+                "totalOut" => inventory_total_out()
+            ]);
+            break;
+
+        case "/inventory/create":
+            require_admin();
+            if (is_post()) {
+                verify_csrf();
+                $productId = (int)($_POST["product_id"] ?? 0);
+                $type = trim($_POST["type"] ?? "IN");
+                $quantity = (int)($_POST["quantity"] ?? 0);
+                $note = trim($_POST["note"] ?? "");
+                $error = "";
+                if ($productId <= 0) $error = "Vui lòng chọn sản phẩm.";
+                elseif ($quantity <= 0) $error = "Số lượng phải lớn hơn 0.";
+                if ($error === "") {
+                    try {
+                        inventory_log_create($productId, $_SESSION["admin_id"], $type, $quantity, $note);
+                        set_flash("success", "Tạo phiếu " . ($type === "IN" ? "nhập kho" : "xuất kho") . " thành công.");
+                        redirect("/inventory");
+                    } catch (Throwable $e) {
+                        $error = $e->getMessage();
+                    }
+                }
+                $products = db()->query("SELECT id, name, quantity FROM products ORDER BY name ASC")->fetchAll();
+                view("inventory/create", [
+                    "title" => "Tạo phiếu Nhập / Xuất kho",
+                    "products" => $products,
+                    "error" => $error,
+                    "old" => $_POST
+                ]);
+                break;
+            }
+            $products = db()->query("SELECT id, name, quantity FROM products ORDER BY name ASC")->fetchAll();
+            view("inventory/create", [
+                "title" => "Tạo phiếu Nhập / Xuất kho",
+                "products" => $products,
+                "error" => "",
+                "old" => []
+            ]);
             break;
 
         case "/products":

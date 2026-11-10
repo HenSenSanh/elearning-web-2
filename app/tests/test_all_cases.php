@@ -10,6 +10,7 @@ require_once __DIR__ . "/../src/helpers.php";
 require_once __DIR__ . "/../src/auth.php";
 require_once __DIR__ . "/../src/category_repository.php";
 require_once __DIR__ . "/../src/brand_repository.php";
+require_once __DIR__ . "/../src/inventory_repository.php";
 require_once __DIR__ . "/../src/product_repository.php";
 
 $passed = 0;
@@ -233,6 +234,47 @@ assert_test("3B.2 Delete single gallery image", count($galleryImagesAfter) === 1
 product_delete($galleryProdId);
 $galleryImagesCleaned = product_images_find($galleryProdId);
 assert_test("3B.3 Cascade cleanup on product delete", count($galleryImagesCleaned) === 0);
+
+// --- MODULE 3C: INVENTORY TRANSACTIONS (NHẬP / XUẤT KHO) ---
+echo "\n--- MODULE 3C: INVENTORY TRANSACTIONS (NHẬP / XUẤT KHO) ---\n";
+$invProdId = product_create([
+    "category_id" => (int)$laptopCat["id"],
+    "brand_id" => (int)$dellBrand["id"],
+    "name" => "Inventory Test Laptop",
+    "sku" => "TEST-INV-" . time(),
+    "description" => "Test inventory",
+    "quantity" => 10,
+    "unit_price" => 10000000,
+    "image_path" => null,
+    "status" => 1
+]);
+
+// Test 3C.1: Stock IN
+inventory_log_create($invProdId, 1, "IN", 15, "Nhập bổ sung từ nhà phân phối");
+$afterIn = product_find($invProdId);
+assert_test("3C.1 Stock IN increases quantity correctly (10 + 15 = 25)", (int)$afterIn["quantity"] === 25);
+
+// Test 3C.2: Stock OUT
+inventory_log_create($invProdId, 1, "OUT", 5, "Xuất giao đại lý");
+$afterOut = product_find($invProdId);
+assert_test("3C.2 Stock OUT decreases quantity correctly (25 - 5 = 20)", (int)$afterOut["quantity"] === 20);
+
+// Test 3C.3: Stock OUT exceeding current stock throws Exception
+$caughtEx = false;
+try {
+    inventory_log_create($invProdId, 1, "OUT", 100, "Xuất quá số lượng");
+} catch (RuntimeException $e) {
+    $caughtEx = true;
+}
+assert_test("3C.3 Stock OUT exceeding current stock throws Exception", $caughtEx === true);
+
+// Test 3C.4: Paginate inventory logs
+$logsResult = inventory_log_paginate(1, 10, $invProdId);
+assert_test("3C.4 Paginate logs finds records", count($logsResult["items"]) >= 2);
+
+// Cleanup
+product_delete($invProdId);
+
 
 
 // --- MODULE 4: DASHBOARD METRICS ---
