@@ -6,6 +6,7 @@ require_once __DIR__ . "/../src/inventory_repository.php";
 require_once __DIR__ . "/../src/customer_repository.php";
 require_once __DIR__ . "/../src/order_repository.php";
 require_once __DIR__ . "/../src/export_service.php";
+require_once __DIR__ . "/../src/activity_log_repository.php";
 require_once __DIR__ . "/../src/product_repository.php";
 
 $path = rtrim(parse_url($_SERVER["REQUEST_URI"], PHP_URL_PATH), "/");
@@ -43,7 +44,10 @@ try {
             if (is_post()) {
                 verify_csrf();
                 $result = admin_login(trim($_POST["username"] ?? ""), $_POST["password"] ?? "");
-                if ($result["success"]) redirect("/dashboard");
+                if ($result["success"]) {
+                    log_activity($_SESSION["admin_id"], "LOGIN", "Đăng nhập hệ thống thành công");
+                    redirect("/dashboard");
+                }
                 view("auth/login", ["title"=>"Đăng nhập Admin","error"=>$result["message"]]);
             } else {
                 view("auth/login", ["title"=>"Đăng nhập Admin","error"=>""]);
@@ -51,6 +55,7 @@ try {
             break;
 
         case "/logout":
+            log_activity($_SESSION["admin_id"] ?? null, "LOGOUT", "Đăng xuất khỏi hệ thống");
             admin_logout(); break;
 
         case "/dashboard":
@@ -91,6 +96,7 @@ try {
                     break;
                 }
                 category_create($name, $description, $status);
+                log_activity($_SESSION["admin_id"], "CREATE_CATEGORY", "Thêm danh mục '{$name}'");
                 set_flash("success", "Thêm danh mục thành công.");
                 redirect("/categories");
             }
@@ -122,6 +128,7 @@ try {
                     break;
                 }
                 category_update($id, $name, $description, $status);
+                log_activity($_SESSION["admin_id"], "UPDATE_CATEGORY", "Cập nhật danh mục #{$id} '{$name}'");
                 set_flash("success", "Cập nhật danh mục thành công.");
                 redirect("/categories");
             }
@@ -136,6 +143,7 @@ try {
             } else {
                 try {
                     category_delete($id);
+                    log_activity($_SESSION["admin_id"], "DELETE_CATEGORY", "Xóa danh mục #{$id}");
                     set_flash("success", "Xóa danh mục thành công.");
                 } catch (PDOException $e) {
                     set_flash("error", "Lỗi khi xóa danh mục: Ràng buộc cơ sở dữ liệu.");
@@ -171,6 +179,7 @@ try {
                     break;
                 }
                 brand_create($name, $description, $status);
+                log_activity($_SESSION["admin_id"], "CREATE_BRAND", "Thêm thương hiệu '{$name}'");
                 set_flash("success", "Thêm thương hiệu thành công.");
                 redirect("/brands");
             }
@@ -202,6 +211,7 @@ try {
                     break;
                 }
                 brand_update($id, $name, $description, $status);
+                log_activity($_SESSION["admin_id"], "UPDATE_BRAND", "Cập nhật thương hiệu #{$id} '{$name}'");
                 set_flash("success", "Cập nhật thương hiệu thành công.");
                 redirect("/brands");
             }
@@ -216,6 +226,7 @@ try {
             } else {
                 try {
                     brand_delete($id);
+                    log_activity($_SESSION["admin_id"], "DELETE_BRAND", "Xóa thương hiệu #{$id}");
                     set_flash("success", "Xóa thương hiệu thành công.");
                 } catch (PDOException $e) {
                     set_flash("error", "Lỗi khi xóa thương hiệu: Ràng buộc cơ sở dữ liệu.");
@@ -467,6 +478,17 @@ try {
             export_orders_csv(order_all());
             break;
 
+        case "/activity-logs":
+            require_admin();
+            $page = max(1, (int)($_GET["page"] ?? 1));
+            $pagination = activity_log_paginate($page, 15);
+            view("activity_logs/index", [
+                "title" => "Nhật ký hoạt động Admin",
+                "logs" => $pagination["items"],
+                "pagination" => $pagination
+            ]);
+            break;
+
         case "/products/export":
             require_admin();
             $keyword = trim($_GET["keyword"] ?? "");
@@ -534,6 +556,7 @@ try {
                         product_image_add($newProdId, $gPath);
                     }
                 }
+                log_activity($_SESSION["admin_id"], "CREATE_PRODUCT", "Thêm sản phẩm #" . $newProdId . " '" . trim($_POST["name"]) . "'");
                 set_flash("success", "Thêm sản phẩm thành công.");
                 redirect("/products");
             }
@@ -585,6 +608,7 @@ try {
                         product_image_add($id, $gPath);
                     }
                 }
+                log_activity($_SESSION["admin_id"], "UPDATE_PRODUCT", "Cập nhật sản phẩm #" . $id . " '" . trim($_POST["name"]) . "'");
                 set_flash("success", "Cập nhật sản phẩm thành công.");
                 redirect("/products/edit?id=" . $id);
             }
@@ -604,6 +628,7 @@ try {
             $prodId = (int)($_POST["product_id"] ?? 0);
             if ($imgId > 0) {
                 product_image_delete($imgId);
+                log_activity($_SESSION["admin_id"], "DELETE_PRODUCT_IMAGE", "Xóa ảnh gallery #" . $imgId . " của sản phẩm #" . $prodId);
                 set_flash("success", "Đã xóa hình ảnh khỏi bộ sưu tập.");
             }
             redirect("/products/edit?id=" . $prodId);
@@ -615,6 +640,7 @@ try {
             if ($product) {
                 delete_product_image($product["image_path"]);
                 product_delete((int)$product["id"]);
+                log_activity($_SESSION["admin_id"], "DELETE_PRODUCT", "Xóa sản phẩm #" . $product["id"] . " '" . $product["name"] . "'");
                 set_flash("success", "Xóa sản phẩm thành công.");
             }
             redirect("/products"); break;

@@ -14,6 +14,7 @@ require_once __DIR__ . "/../src/inventory_repository.php";
 require_once __DIR__ . "/../src/customer_repository.php";
 require_once __DIR__ . "/../src/order_repository.php";
 require_once __DIR__ . "/../src/export_service.php";
+require_once __DIR__ . "/../src/activity_log_repository.php";
 require_once __DIR__ . "/../src/product_repository.php";
 
 $passed = 0;
@@ -370,6 +371,13 @@ $testRows = [
 $csvOutput = generate_csv_string($testHeaders, $testRows);
 assert_test("3F.1 CSV output begins with UTF-8 BOM", str_starts_with($csvOutput, "\xEF\xBB\xBF"));
 assert_test("3F.2 CSV output preserves UTF-8 Vietnamese and handles comma/quotes", strpos($csvOutput, "Laptop Dell Tiếng Việt Có Dấu") !== false && strpos($csvOutput, '"Điện thoại thông minh, phiên bản 2"') !== false);
+
+// --- MODULE 3G: ADMIN ACTIVITY LOGS ---
+echo "\n--- MODULE 3G: ADMIN ACTIVITY LOGS ---\n";
+log_activity(1, "TEST_ACTION", "Thực hiện thao tác thử nghiệm trên hệ thống", "127.0.0.1");
+$logsResult = activity_log_paginate(1, 5);
+assert_test("3G.1 Activity log records created and retrievable", count($logsResult["items"]) >= 1 && $logsResult["items"][0]["action"] === "TEST_ACTION");
+
 
 
 
