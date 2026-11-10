@@ -16,6 +16,7 @@ require_once __DIR__ . "/../src/order_repository.php";
 require_once __DIR__ . "/../src/export_service.php";
 require_once __DIR__ . "/../src/activity_log_repository.php";
 require_once __DIR__ . "/../src/password_reset_repository.php";
+require_once __DIR__ . "/../src/api_controller.php";
 require_once __DIR__ . "/../src/product_repository.php";
 
 $passed = 0;
@@ -404,6 +405,48 @@ assert_test("3H.5 Used token is invalidated", $checkUsedToken === null);
 // Reset password back to default "admin123" for subsequent tests
 $restoreToken = password_reset_create_token("admin@example.com");
 password_reset_apply($restoreToken, "admin123");
+
+// --- MODULE 3I: REST API CONTROLLER ---
+echo "\n--- MODULE 3I: REST API CONTROLLER ---\n";
+// Test 3I.1: GET /api/categories
+$apiCatRes = execute_api_route("GET", "/api/categories", []);
+assert_test("3I.1 GET /api/categories returns JSON array", $apiCatRes["status"] === 200 && is_array($apiCatRes["data"]) && count($apiCatRes["data"]) >= 3);
+
+// Test 3I.2: GET /api/brands
+$apiBrandRes = execute_api_route("GET", "/api/brands", []);
+assert_test("3I.2 GET /api/brands returns JSON array", $apiBrandRes["status"] === 200 && is_array($apiBrandRes["data"]) && count($apiBrandRes["data"]) >= 4);
+
+// Test 3I.3: GET /api/products
+$apiProdRes = execute_api_route("GET", "/api/products", ["per_page" => 5]);
+assert_test("3I.3 GET /api/products returns paginated items", $apiProdRes["status"] === 200 && isset($apiProdRes["data"]["items"]));
+
+// Test 3I.4: POST /api/products (Create via API)
+$apiPostRes = execute_api_route("POST", "/api/products", [
+    "name" => "API Created Laptop",
+    "category_id" => (int)$laptopCat["id"],
+    "brand_id" => (int)$dellBrand["id"],
+    "sku" => "API-SKU-" . time(),
+    "quantity" => 15,
+    "unit_price" => 18000000,
+    "description" => "Tạo từ REST API",
+    "status" => 1
+]);
+assert_test("3I.4 POST /api/products creates product (HTTP 201)", $apiPostRes["status"] === 201 && !empty($apiPostRes["data"]["id"]));
+
+$apiCreatedId = (int)$apiPostRes["data"]["id"];
+
+// Test 3I.5: GET /api/products with ID
+$apiGetSingle = execute_api_route("GET", "/api/products", ["id" => $apiCreatedId]);
+assert_test("3I.5 GET /api/products?id=X returns product detail", $apiGetSingle["status"] === 200 && $apiGetSingle["data"]["id"] == $apiCreatedId);
+
+// Test 3I.6: DELETE /api/products
+$apiDelRes = execute_api_route("DELETE", "/api/products", ["id" => $apiCreatedId]);
+assert_test("3I.6 DELETE /api/products deletes product", $apiDelRes["status"] === 200);
+
+// Test 3I.7: GET nonexistent product returns 404
+$apiGet404 = execute_api_route("GET", "/api/products", ["id" => 999999]);
+assert_test("3I.7 Non-existent product returns HTTP 404", $apiGet404["status"] === 404);
+
 
 
 

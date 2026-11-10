@@ -8,10 +8,16 @@ require_once __DIR__ . "/../src/order_repository.php";
 require_once __DIR__ . "/../src/export_service.php";
 require_once __DIR__ . "/../src/activity_log_repository.php";
 require_once __DIR__ . "/../src/password_reset_repository.php";
+require_once __DIR__ . "/../src/api_controller.php";
 require_once __DIR__ . "/../src/product_repository.php";
 
 $path = rtrim(parse_url($_SERVER["REQUEST_URI"], PHP_URL_PATH), "/");
 $path = $path === "" ? "/" : $path;
+
+// Direct dispatch for REST API endpoints without rendering HTML templates
+if (str_starts_with($path, "/api")) {
+    handle_api_http_request();
+}
 
 function view(string $view, array $data = []): void {
     extract($data);
