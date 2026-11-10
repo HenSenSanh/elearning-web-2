@@ -278,6 +278,15 @@ assert_test("3C.3 Stock OUT exceeding current stock throws Exception", $caughtEx
 $logsResult = inventory_log_paginate(1, 10, $invProdId);
 assert_test("3C.4 Paginate logs finds records", count($logsResult["items"]) >= 2);
 
+// Test 3C.5: Inventory create view renders HTML form
+ob_start();
+$products = db()->query("SELECT id, name, quantity FROM products ORDER BY name ASC")->fetchAll();
+$error = "";
+$old = [];
+require __DIR__ . "/../views/inventory/create.php";
+$viewOutput = ob_get_clean();
+assert_test("3C.5 Inventory create view renders HTML form", strpos($viewOutput, "Tạo phiếu Nhập / Xuất kho") !== false);
+
 // Cleanup
 product_delete($invProdId);
 

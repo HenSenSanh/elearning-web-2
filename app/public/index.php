@@ -339,6 +339,7 @@ try {
                 if ($error === "") {
                     try {
                         inventory_log_create($productId, $_SESSION["admin_id"], $type, $quantity, $note);
+                        log_activity($_SESSION["admin_id"], "INVENTORY_" . $type, "Tạo phiếu " . ($type === "IN" ? "nhập" : "xuất") . " kho số lượng " . $quantity . " cho sản phẩm ID " . $productId);
                         set_flash("success", "Tạo phiếu " . ($type === "IN" ? "nhập kho" : "xuất kho") . " thành công.");
                         redirect("/inventory");
                     } catch (Throwable $e) {
@@ -355,6 +356,12 @@ try {
                 break;
             }
             $products = db()->query("SELECT id, name, quantity FROM products ORDER BY name ASC")->fetchAll();
+            view("inventory/create", [
+                "title" => "Tạo phiếu Nhập / Xuất kho",
+                "products" => $products,
+                "error" => "",
+                "old" => []
+            ]);
             break;
 
         case "/customers":
