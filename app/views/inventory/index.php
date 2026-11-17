@@ -1,81 +1,40 @@
-<div class="page-actions">
-    <a class="btn primary" href="/inventory/create">+ Tạo phiếu Nhập / Xuất kho</a>
-    <a class="btn secondary" href="/inventory/export">📥 Xuất CSV lịch sử kho</a>
+<div class="page-actions actions">
+    <a class="btn primary" href="/inventory/movements">Sổ biến động kho (Read-only)</a>
+    <a class="btn secondary" href="/inventory?<?= e(http_build_query($filters + ['export'=>'csv'])) ?>">Xuất CSV tồn kho</a>
 </div>
-<?php if ($msg = get_flash("error")): ?><div class="alert error"><?= e($msg) ?></div><?php endif; ?>
-<?php if ($msg = get_flash("success")): ?><div class="alert success"><?= e($msg) ?></div><?php endif; ?>
-
-<div class="metrics" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
-    <div class="card" style="background: #fff; padding: 16px; border-radius: 8px; border-left: 4px solid #10b981;">
-        <span style="color: #64748b; font-size: 13px;">Tổng hàng đã nhập</span>
-        <h2 style="margin: 8px 0 0; color: #10b981;">+<?= number_format($totalIn) ?></h2>
-    </div>
-    <div class="card" style="background: #fff; padding: 16px; border-radius: 8px; border-left: 4px solid #ef4444;">
-        <span style="color: #64748b; font-size: 13px;">Tổng hàng đã xuất</span>
-        <h2 style="margin: 8px 0 0; color: #ef4444;">-<?= number_format($totalOut) ?></h2>
-    </div>
-</div>
-
 <div class="panel">
-<table class="table">
-<thead>
-    <tr>
-        <th>ID</th>
-        <th>Thời gian</th>
-        <th>Sản phẩm / SKU</th>
-        <th>Loại phiếu</th>
-        <th>Số lượng</th>
-        <th>Người thực hiện</th>
-        <th>Ghi chú</th>
-    </tr>
-</thead>
-<tbody>
-<?php foreach ($logs as $log): ?>
-<tr>
-    <td>#<?= e($log["id"]) ?></td>
-    <td><?= date("d/m/Y H:i", strtotime($log["created_at"])) ?></td>
-    <td>
-        <strong><?= e($log["product_name"]) ?></strong>
-        <?php if (!empty($log["product_sku"])): ?>
-            <small style="color: #64748b; display: block;">SKU: <?= e($log["product_sku"]) ?></small>
-        <?php endif; ?>
-    </td>
-    <td>
-        <?php if ($log["type"] === "IN"): ?>
-            <span class="badge success">Nhập kho (+)</span>
+    <p>Tồn thực tế theo <strong>sản phẩm · kho / vị trí · lô</strong>. Chỉ phiếu đã ghi sổ làm thay đổi số lượng.</p>
+    <p class="hint">
+        Đối soát tự động (<code>stock_balances = SUM(stock_movements) = nhập ghi sổ - xuất ghi sổ</code>):
+        <?php if (!empty($reconciliation['is_balanced'])): ?>
+            <span class="badge success">Khớp 100%</span>
+            (Tổng tồn: <strong><?= number_format((int)$reconciliation['total_balance']) ?></strong> trên <?= (int)$reconciliation['key_count'] ?> bộ khóa)
         <?php else: ?>
-            <span class="badge danger" style="background: #ef4444; color: #fff;">Xuất kho (-)</span>
+            <span class="badge warning">Phát hiện lệch</span>
+            (Tồn: <?= (int)$reconciliation['total_balance'] ?>, Biến động: <?= (int)$reconciliation['total_movement'] ?>, Phiếu ghi sổ: <?= (int)$reconciliation['total_posted_net'] ?>)
         <?php endif; ?>
-    </td>
-    <td><strong><?= number_format((int)$log["quantity"]) ?></strong></td>
-    <td><?= e($log["admin_username"] ?? "Hệ thống") ?></td>
-    <td><?= e($log["note"] ?: "—") ?></td>
-</tr>
-<?php endforeach; ?>
-<?php if (empty($logs)): ?>
-    <tr><td colspan="7" class="empty">Chưa có giao dịch nhập xuất kho nào.</td></tr>
-<?php endif; ?>
-</tbody>
-</table>
-
-<?php if (!empty($pagination) && $pagination["totalPages"] > 1): ?>
-<div class="pagination-wrapper">
-    <div class="pagination-info">
-        Trang <strong><?= (int)$pagination["currentPage"] ?></strong> / <strong><?= (int)$pagination["totalPages"] ?></strong> (Tổng <?= (int)$pagination["totalItems"] ?> lượt)
-    </div>
-    <div class="pagination">
-        <?php if ($pagination["currentPage"] > 1): ?>
-            <a class="page-link" href="/inventory?page=1">« Đầu</a>
-            <a class="page-link" href="/inventory?page=<?= $pagination["currentPage"] - 1 ?>">‹ Trước</a>
-        <?php endif; ?>
-        <?php for ($p = 1; $p <= $pagination["totalPages"]; $p++): ?>
-            <a class="page-link <?= $p === (int)$pagination["currentPage"] ? 'active' : '' ?>" href="/inventory?page=<?= $p ?>"><?= $p ?></a>
-        <?php endfor; ?>
-        <?php if ($pagination["currentPage"] < $pagination["totalPages"]): ?>
-            <a class="page-link" href="/inventory?page=<?= $pagination["currentPage"] + 1 ?>">Sau ›</a>
-            <a class="page-link" href="/inventory?page=<?= $pagination["totalPages"] ?>">Cuối »</a>
-        <?php endif; ?>
-    </div>
+    </p>
+    <form method="get" action="/inventory" class="filter-form">
+        <input name="keyword" placeholder="Tên sản phẩm, SKU hoặc mã lô" value="<?= e($filters['keyword'] ?? '') ?>">
+        <select name="warehouse_id"><option value="0">Tất cả kho</option>
+            <?php foreach ($warehouses as $warehouse): ?><option value="<?= (int)$warehouse['id'] ?>" <?= (int)($filters['warehouse_id'] ?? 0)===(int)$warehouse['id']?'selected':'' ?>><?= e($warehouse['name']) ?></option><?php endforeach; ?>
+        </select>
+        <select name="per_page" aria-label="Số dòng"><?php foreach ([5,10,20,50] as $size): ?><option value="<?= $size ?>" <?= $result['per_page']===$size?'selected':'' ?>><?= $size ?> dòng</option><?php endforeach; ?></select>
+        <button class="btn secondary">Lọc tồn kho</button>
+    </form>
 </div>
-<?php endif; ?>
+<div class="panel table-scroll">
+    <p>Tổng theo đơn vị (toàn bộ kết quả lọc):
+    <?php foreach ($result['quantity_by_unit'] as $unit): ?><span class="badge muted"><?= number_format((int)$unit['quantity']) ?> <?= e($unit['unit_name']) ?></span> <?php endforeach; ?>
+    <?php if (!$result['quantity_by_unit']): ?>Chưa có số dư.<?php endif; ?></p>
+    <table class="table"><thead><tr><th>Sản phẩm</th><th>Kho / vị trí</th><th>Lô</th><th>Hạn dùng</th><th>Tồn</th><th>Đơn vị</th></tr></thead><tbody>
+    <?php foreach ($result['items'] as $item): ?>
+        <tr><td><strong><?= e($item['name']) ?></strong><small><?= e($item['sku']) ?></small></td>
+        <td><?= e($item['warehouse_name']) ?><small><?= e($item['location_code']) ?></small></td><td><?= e($item['lot_code']) ?></td>
+        <td><?= e($item['expires_on'] ?? 'Không giới hạn') ?><?php if ($item['expires_on'] && $item['expires_on']<date('Y-m-d')): ?><small>Đã hết hạn</small><?php endif; ?></td>
+        <td><strong><?= number_format((int)$item['quantity']) ?></strong></td><td><?= e($item['unit_name']) ?></td></tr>
+    <?php endforeach; ?>
+    <?php if (!$result['items']): ?><tr><td colspan="6" class="empty">Chưa có số dư phù hợp. Tạo và ghi sổ phiếu nhập để có tồn kho.</td></tr><?php endif; ?>
+    </tbody></table>
+    <?= pagination_links($result, '/inventory', $filters) ?>
 </div>

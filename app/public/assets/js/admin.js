@@ -1,56 +1,57 @@
-function confirmDelete(message){return confirm(message||"Bạn chắc chắn muốn xóa dữ liệu này?")}
-function setFieldError(id,message){const el=document.getElementById(id);if(el){el.textContent=message}}
-function clearFieldErrors(){document.querySelectorAll(".field-error").forEach(function(el){el.textContent=""})}
+function confirmDelete(message) {
+    return confirm(message || 'Bạn chắc chắn muốn xóa dữ liệu này?');
+}
+function setFieldError(id, message) {
+    const element = document.getElementById(id);
+    if (element) element.textContent = message;
+}
+function clearFieldErrors() {
+    document.querySelectorAll('.field-error').forEach(element => { element.textContent = ''; });
+}
 
-const loginForm=document.getElementById("loginForm");
-if(loginForm){
-    loginForm.addEventListener("submit",function(event){
+const loginForm = document.getElementById('loginForm');
+if (loginForm) {
+    loginForm.addEventListener('submit', event => {
         clearFieldErrors();
-        let valid=true;
-        const username=document.getElementById("username").value.trim();
-        const password=document.getElementById("password").value;
-        if(!username){setFieldError("usernameError","Vui lòng nhập tài khoản hoặc email.");valid=false}
-        if(!password){setFieldError("passwordError","Vui lòng nhập mật khẩu.");valid=false}
-        if(!valid){event.preventDefault()}
+        let valid = true;
+        if (!document.getElementById('username').value.trim()) {
+            setFieldError('usernameError', 'Vui lòng nhập tài khoản hoặc email.');
+            valid = false;
+        }
+        if (!document.getElementById('password').value) {
+            setFieldError('passwordError', 'Vui lòng nhập mật khẩu.');
+            valid = false;
+        }
+        if (!valid) event.preventDefault();
     });
 }
 
-const categoryForm=document.getElementById("categoryForm");
-if(categoryForm){
-    categoryForm.addEventListener("submit",function(event){
+const productForm = document.getElementById('productForm');
+if (productForm) {
+    productForm.addEventListener('submit', event => {
         clearFieldErrors();
-        let valid=true;
-        const name=document.getElementById("category_name").value.trim();
-        if(!name){setFieldError("categoryNameError","Tên danh mục không được để trống.");valid=false}
-        if(!valid){event.preventDefault()}
-    });
-}
-
-const productForm=document.getElementById("productForm");
-if(productForm){
-    productForm.addEventListener("submit",function(event){
-        clearFieldErrors();
-        let valid=true;
-        const name=document.getElementById("product_name").value.trim();
-        const categoryId=document.getElementById("category_id").value;
-        const quantity=Number(document.getElementById("quantity").value);
-        const price=Number(document.getElementById("unit_price").value);
-        const image=document.getElementById("image");
-        if(!name){setFieldError("productNameError","Tên sản phẩm không được để trống.");valid=false}
-        if(!categoryId){setFieldError("categoryError","Vui lòng chọn danh mục sản phẩm.");valid=false}
-        if(quantity<0||Number.isNaN(quantity)){setFieldError("quantityError","Số lượng phải lớn hơn hoặc bằng 0.");valid=false}
-        if(price<0||Number.isNaN(price)){setFieldError("priceError","Đơn giá phải lớn hơn hoặc bằng 0.");valid=false}
-        if(image&&image.files.length>0){
-            const file=image.files[0];
-            const allowed=["image/jpeg","image/png","image/webp","image/gif"];
-            if(!allowed.includes(file.type)){
-                setFieldError("imageError","Chỉ cho phép upload JPG, PNG, WEBP hoặc GIF.");
-                valid=false;
-            } else if(file.size>2*1024*1024){
-                setFieldError("imageError","Dung lượng hình ảnh tối đa là 2MB.");
-                valid=false;
+        let valid = true;
+        if (!document.getElementById('product_name').value.trim()) {
+            setFieldError('productNameError', 'Tên sản phẩm không được để trống.');
+            valid = false;
+        }
+        if (!document.getElementById('category_id').value) {
+            setFieldError('categoryError', 'Vui lòng chọn danh mục.');
+            valid = false;
+        }
+        // Đơn vị và ngưỡng tồn dùng required/min/step; server luôn kiểm tra lại.
+        const image = document.getElementById('image');
+        if (image && image.files.length > 0) {
+            const file = image.files[0];
+            if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+                alert('Chỉ cho phép upload JPG, PNG, WEBP hoặc GIF.');
+                valid = false;
+            }
+            if (file.size > 2 * 1024 * 1024) {
+                alert('Dung lượng hình ảnh tối đa là 2 MB.');
+                valid = false;
             }
         }
-        if(!valid){event.preventDefault()}
+        if (!valid) event.preventDefault();
     });
 }

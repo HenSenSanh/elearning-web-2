@@ -1,34 +1,18 @@
 <?php
-$config = require __DIR__ . "/../../src/config.php";
-$currentPath = parse_url($_SERVER["REQUEST_URI"], PHP_URL_PATH);
+$config = require __DIR__ . '/../../src/config.php';
+$currentPath = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 ?>
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <title><?= e($title ?? $config["app"]["name"]) ?></title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="/assets/css/admin.css">
-</head>
-<body>
-<?php if (!empty($_SESSION["admin_id"])): ?>
-<div class="admin-layout">
-    <aside class="sidebar">
-        <div class="brand"><div class="brand-icon">A</div><div><strong>Admin Panel</strong><small>Product Manager</small></div></div>
-        <nav class="nav">
-            <a class="<?= $currentPath === '/dashboard' ? 'active' : '' ?>" href="/dashboard">Dashboard</a>
-            <a class="<?= str_starts_with($currentPath, '/categories') ? 'active' : '' ?>" href="/categories">Danh mục</a>
-            <a class="<?= str_starts_with($currentPath, '/brands') ? 'active' : '' ?>" href="/brands">Thương hiệu</a>
-            <a class="<?= str_starts_with($currentPath, '/products') ? 'active' : '' ?>" href="/products">Sản phẩm</a>
-            <a class="<?= str_starts_with($currentPath, '/inventory') ? 'active' : '' ?>" href="/inventory">Nhập / Xuất kho</a>
-            <a class="<?= str_starts_with($currentPath, '/orders') ? 'active' : '' ?>" href="/orders">Đơn hàng</a>
-            <a class="<?= str_starts_with($currentPath, '/customers') ? 'active' : '' ?>" href="/customers">Khách hàng</a>
-            <a class="<?= str_starts_with($currentPath, '/activity-logs') ? 'active' : '' ?>" href="/activity-logs">Nhật ký</a>
-            <a href="/logout">Đăng xuất</a>
-        </nav>
-    </aside>
-    <main class="main">
-        <header class="topbar">
-            <div><h1><?= e($title ?? "Admin") ?></h1><p>Xin chào, <?= e($_SESSION["admin_full_name"] ?? $_SESSION["admin_username"] ?? "Admin") ?></p></div>
-        </header>
+<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><title><?= e($title ?? $config['app']['name']) ?></title><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="stylesheet" href="/assets/css/admin.css"></head><body>
+<?php if (!empty($_SESSION['admin_id'])): ?>
+<div class="admin-layout"><aside class="sidebar">
+<div class="brand"><div class="brand-icon">K</div><div><strong>Kho & Sản phẩm</strong><small>PHP · Bài thực hành mở rộng</small></div></div>
+<nav class="nav">
+<?php foreach ([['/dashboard','dashboard.view','Tổng quan tồn kho'],['/inventory','inventory.view','Tồn kho theo vị trí'],['/inventory/movements','inventory.view','Sổ biến động kho'],['/documents','documents.view','Phiếu nhập / xuất'],['/products','products.view','Sản phẩm'],['/categories','categories.view','Danh mục sản phẩm'],['/prices','prices.view','Giá theo thời gian'],['/warehouse-catalog','warehouse.manage','Danh mục kho'],['/access','access.manage','Nhóm & phân quyền']] as [$href,$permission,$label]): ?>
+<?php $isActive = ($href === '/inventory') ? ($currentPath === '/inventory') : str_starts_with($currentPath,$href); ?>
+<?php if (can($permission)): ?><a class="<?= $isActive ? 'active' : '' ?>" href="<?= e($href) ?>"><?= e($label) ?></a><?php endif; ?>
+<?php endforeach; ?>
+</nav><form class="logout-form" method="POST" action="/logout"><?= csrf_field() ?><button class="btn secondary" type="submit">Đăng xuất</button></form>
+</aside><main class="main"><header class="topbar"><div><small class="eyebrow">QUẢN TRỊ KHO HÀNG</small><h1><?= e($title ?? 'Admin') ?></h1><p><?= e($_SESSION['admin_full_name'] ?: $_SESSION['admin_username']) ?> · Giờ Việt Nam (UTC+7)</p></div></header>
+<?php if (!empty($_SESSION['flash'])): ?><div class="alert success" role="status"><?= e($_SESSION['flash']) ?></div><?php unset($_SESSION['flash']); endif; ?>
+<?php if (!empty($_SESSION['flash_error'])): ?><div class="alert error" role="alert"><?= e($_SESSION['flash_error']) ?></div><?php unset($_SESSION['flash_error']); endif; ?>
 <?php endif; ?>

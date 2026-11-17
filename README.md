@@ -1,226 +1,189 @@
-# Hướng dẫn xây dựng trang Admin quản lý sản phẩm bằng PHP, MySQL và Docker
+# PHP Admin — Quản lý sản phẩm, phân quyền và kho
 
-Dự án này là bộ source PHP thuần hoàn chỉnh cho trang quản trị thương mại điện tử / quản lý sản phẩm. Hệ thống đáp ứng đầy đủ nghiệp vụ quản lý bán hàng, kho vận, khách hàng, bảo mật và cung cấp REST API.
+Source PHP thuần + PDO + MySQL dùng cho bài thực hành lập trình web. Bản mở rộng cung cấp một luồng mẫu từ khai báo kho/giá đến lập phiếu, ghi sổ, xem tồn và in phiếu; sinh viên tiếp tục phát triển theo yêu cầu trong `docs/`.
 
-## 1. Chức năng chính
+## 1. Phần đã có trong khung mẫu
 
-- **Xác thực & Bảo mật**:
-  - Đăng nhập/Đăng xuất admin.
-  - Mã hóa mật khẩu chuẩn **BCRYPT** bằng `password_hash()` & `password_verify()` (tự động nâng cấp hash SHA-256 cũ).
-  - Quên mật khẩu qua email token bảo mật (hết hạn sau 1 giờ).
-  - Bảo vệ mọi form chống tấn công CSRF bằng CSRF token.
-  - Chống SQL Injection bằng PDO Prepared Statements.
-  - Nhật ký hoạt động Admin (Activity Audit Logs) ghi nhận lịch sử mọi thao tác kèm địa chỉ IP.
-- **Dashboard**:
-  - Thống kê tổng danh mục, thương hiệu, tổng sản phẩm, số lượng tồn kho và tổng giá trị tồn kho.
-- **Quản lý danh mục (Categories)**:
-  - Thêm, sửa, xóa danh mục (chặn xóa an toàn nếu có sản phẩm).
-  - Bật/tắt trạng thái hiển thị.
-- **Quản lý thương hiệu (Brands)**:
-  - Thêm, sửa, xóa thương hiệu (chặn xóa nếu có sản phẩm liên kết).
-  - Liên kết thương hiệu với sản phẩm và bộ lọc.
-- **Quản lý sản phẩm (Products)**:
-  - Thêm, sửa, xóa sản phẩm kèm phân trang (5 sản phẩm/trang).
-  - Tìm kiếm theo tên sản phẩm hoặc SKU; lọc theo danh mục và thương hiệu.
-  - Upload ảnh đại diện chính (JPG, PNG, WEBP, GIF tối đa 2MB; tự xóa ảnh cũ).
-  - **Bộ sưu tập nhiều hình ảnh (Gallery)**: Upload nhiều ảnh bổ sung, quản lý và xóa từng ảnh trong gallery.
-- **Quản lý Nhập / Xuất kho (Inventory)**:
-  - Tạo phiếu nhập kho (+) và xuất kho (-) có kiểm tra ràng buộc tồn kho.
-  - Tự động đồng bộ số lượng tồn kho sản phẩm theo transaction CSDL.
-  - Theo dõi lịch sử biến động kho và thống kê tổng lượng nhập/xuất.
-- **Quản lý Khách hàng (Customers)**:
-  - Quản lý thông tin khách hàng (họ tên, email duy nhất, số điện thoại, địa chỉ).
-  - Tìm kiếm và phân trang danh sách khách hàng.
-- **Quản lý Đơn hàng (Orders & Items)**:
-  - Tạo đơn hàng cho khách hàng với nhiều sản phẩm.
-  - Tự động trừ tồn kho khi tạo đơn và hoàn kho khi hủy đơn (`cancelled`).
-  - Cập nhật trạng thái đơn: Chờ xử lý (`pending`), Đang xử lý (`processing`), Hoàn thành (`completed`), Đã hủy (`cancelled`).
-- **Xuất dữ liệu Excel / CSV**:
-  - Xuất danh sách sản phẩm, lịch sử kho, danh sách đơn hàng ra file CSV chuẩn UTF-8 BOM hiển thị tiếng Việt hoàn hảo trên Microsoft Excel.
-- **REST API Subsystem**:
-  - Cung cấp API JSON chuẩn RESTful cho bên thứ ba hoặc Mobile App:
-    - `GET /api/categories`
-    - `GET /api/brands`
-    - `GET /api/products` (kèm lọc, tìm kiếm, phân trang)
-    - `GET /api/products?id={id}`
-    - `POST /api/products`
-    - `PUT /api/products?id={id}`
-    - `DELETE /api/products?id={id}`
-    - `GET /api/orders`
-    - `POST /api/orders`
-    - `GET /api/customers`
-  - Hỗ trợ CORS đầy đủ cho frontend React/Vue/Flutter.
+- Đăng nhập, danh mục và sản phẩm có hình ảnh; sản phẩm có đơn vị cơ sở và mức tồn tối thiểu.
+- Phân trang thực trên database cho sản phẩm, danh mục, lịch sử giá, danh mục kho, tồn kho và phiếu; tìm kiếm/lọc được giữ khi chuyển trang.
+- Phân quyền chức năng theo nhóm và ngoại lệ từng tài khoản (`UserPermission`).
+- Khai báo đơn vị, kho, vị trí khu/kệ/ô và lô sản phẩm.
+- Lịch sử giá nhập/xuất theo khoảng thời gian, kiểm tra chồng khoảng; không lấy giá từ sản phẩm.
+- Phiếu nhập/xuất nhiều dòng: nháp → ghi sổ hoặc nháp → hủy; chụp giá và thông tin hàng tại lúc lập phiếu.
+- Ghi sổ trong transaction, khóa số dư, ngăn âm tồn và ghi trùng; sổ biến động đối soát được với số dư.
+- In phiếu đã ghi sổ từ dữ liệu chụp; đây là phiếu kho nội bộ.
+- Dashboard tồn theo đơn vị/kho, sản phẩm chạm hoặc dưới mức tồn tối thiểu và phiếu gần đây.
 
----
+Đặc tả, sơ đồ dữ liệu và wireframe từng chức năng: [docs/DE_XUAT_MO_RONG.md](docs/DE_XUAT_MO_RONG.md). Bài tập, tiêu chí nghiệm thu và rubric: [docs/BAI_TAP_SINH_VIEN.md](docs/BAI_TAP_SINH_VIEN.md).
 
-## 2. Cấu trúc thư mục
+## 2. Chạy lần đầu
+
+Yêu cầu Docker Desktop hoặc Docker Engine có Compose. Database dùng MySQL 8.0.16 trở lên để thực thi các ràng buộc `CHECK` trong schema.
+
+Kiểm tra `.env` ở thư mục gốc. Cấu hình mẫu dùng:
+
+| Biến | Giá trị mẫu / ý nghĩa |
+|---|---|
+| `APP_URL` | `http://localhost:8090` |
+| `DB_HOST` | `mysql` — tên service trong mạng Docker |
+| `DB_PORT` | `3306` bên trong Docker; cổng host của MySQL là `3308` |
+| `DB_DATABASE` | `admin_product_db` |
+| `DB_USERNAME`, `DB_PASSWORD` | Tài khoản ứng dụng trong `.env` |
+| `DB_ROOT_PASSWORD` | Mật khẩu root dùng khi tạo database |
+| `SESSION_NAME` | Tên cookie session |
+| `UPLOAD_MAX_SIZE` | `2097152` byte, tương đương 2 MB |
+
+`database/init.sql` khai báo database mẫu `admin_product_db`. Nếu đổi tên database, phải sửa tương ứng trong script cài mới và `.env`.
+
+```bash
+docker compose up -d --build
+docker compose logs mysql
+```
+
+Đợi MySQL khởi tạo xong trước khi đăng nhập:
+
+- Trang quản trị: [http://localhost:8090](http://localhost:8090).
+- phpMyAdmin: [http://localhost:8091](http://localhost:8091), server `mysql`, tài khoản ứng dụng trong `.env`.
+
+Các tài khoản sau chỉ phục vụ dữ liệu minh họa của **cài mới**:
+
+| Tài khoản | Mật khẩu mẫu | Nhóm | Khả năng chính |
+|---|---|---|---|
+| `admin` | `admin123` | ADMIN | Tất cả quyền của khung mẫu |
+| `clerk` | `clerk123` | STOCK_CLERK | Xem, lập/hủy nháp nhập xuất, in; không ghi sổ |
+| `manager` | `manager123` | STOCK_MANAGER | Xem, quản lý danh mục kho, ghi sổ và in; không lập phiếu |
+| `viewer` | `viewer123` | VIEWER | Xem dashboard, sản phẩm, danh mục, tồn và phiếu; không sửa/in |
+
+Các nhóm/quyền được lưu trong database, có thể thay đổi ở `/access`. Tên `admin` không tạo cơ chế bỏ qua phân quyền.
+
+## 3. Nâng cấp database cũ, giữ dữ liệu
+
+Áp dụng mục này khi đã chạy phiên bản chỉ có `admins`, `categories`, `products` và volume MySQL đã tồn tại. Docker chỉ chạy `init.sql` khi thư mục dữ liệu MySQL còn trống; khởi động lại container không nâng cấp schema.
+
+1. Dừng thao tác ghi trên ứng dụng; khởi động MySQL nếu cần:
+
+   ```bash
+   docker compose up -d mysql
+   ```
+
+2. Sao lưu ra file riêng trước khi chạy migration. Lệnh đọc mật khẩu từ môi trường của container:
+
+   ```bash
+   docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump -uroot --single-transaction "$MYSQL_DATABASE"' > backup-before-001.sql
+   ```
+
+3. Thử trên bản sao trước, rồi chạy **một lần** theo thứ tự `001_inventory_access.sql` → `002_e7_access_and_catalog.sql` trên database cũ (nếu database đã chạy `001`, chỉ chạy `002`):
+
+   ```bash
+   docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot "$MYSQL_DATABASE"' < database/migrations/001_inventory_access.sql
+   docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot "$MYSQL_DATABASE"' < database/migrations/002_e7_access_and_catalog.sql
+   ```
+
+4. Kiểm tra dấu migration và dữ liệu gốc đã được lưu để đối chiếu:
+
+   ```bash
+   docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot "$MYSQL_DATABASE" -e "SELECT * FROM schema_migrations; SELECT * FROM legacy_product_stock_prices;"'
+   docker compose up -d --build
+   ```
+
+Migration tạo lịch sử giá nhập và xuất từ giá cũ, tạo phiếu nhập số dư đầu `OPENING-MIGRATION-001`, dòng sổ biến động và số dư kho MAIN/DEFAULT/lô NOLOT. Bản gốc số lượng/giá được giữ trong `legacy_product_stock_prices` trước khi bỏ hai cột `quantity`, `unit_price` khỏi `products`.
+
+Giá cũ được dùng cho cả hai loại giá ban đầu là giả định chuyển đổi, không chứng minh đó là giá vốn. Các tài khoản `admins` cũ nhận nhóm ADMIN để giữ quyền quản trị; hãy rà lại và phân nhóm sau nâng cấp. Migration không thêm tài khoản clerk/manager/viewer vào dữ liệu cũ.
+
+MySQL DDL tự commit. Nếu script lỗi giữa chừng, không coi toàn bộ migration đã rollback và không chạy lại ngay; xem lỗi, kiểm tra schema, xử lý trên bản sao hoặc khôi phục từ bản sao lưu. Không xóa volume để nâng cấp database có dữ liệu cần giữ. Không đưa file sao lưu chứa dữ liệu cá nhân lên kho mã nguồn.
+
+## 4. Luồng thao tác mẫu
+
+1. Vào **Danh mục kho**, tạo đơn vị, kho và vị trí. Vị trí gồm khu, kệ, ô; lô sản phẩm được quản lý riêng.
+2. Tạo sản phẩm, chọn đơn vị cơ sở và mức tồn tối thiểu. Sản phẩm mới tự có lô `NOLOT`; tạo thêm lô có hạn dùng khi cần.
+3. Vào **Giá theo thời gian**, tạo giá nhập và giá xuất có hiệu lực tại ngày dự kiến lập phiếu.
+4. Đăng nhập `clerk`, lập phiếu nhập nháp, chọn sản phẩm/vị trí/lô và số lượng.
+5. Đăng nhập `manager`, xem rồi ghi sổ phiếu nhập. Kiểm tra tồn tăng ở đúng vị trí/lô.
+6. Lập và ghi sổ phiếu xuất theo luồng tương tự. Xuất vượt tồn hoặc lô đã quá hạn sẽ bị từ chối toàn phiếu.
+7. Với quyền in, mở phiếu đã ghi sổ và chọn **In phiếu**; có thể lưu PDF từ hộp thoại in của trình duyệt.
+
+Mọi đơn giá được server lấy từ bảng lịch sử theo loại phiếu/ngày phiếu. Phiếu nháp chưa đổi tồn; ghi sổ giữ nguyên giá đã chụp lúc lập nháp. Phiếu đã ghi sổ bất biến, phiếu nháp sai phải hủy và tạo lại.
+
+Khoảng giá dùng `[valid_from, valid_to)`, cho phép hai khoảng tiếp giáp. Ngoài thao tác thêm khoảng mới (`action=create`), màn hình `/prices` đã bổ sung khung **Đóng khoảng mở & Lập mức giá kế tiếp (Nguyên tử)** (`action=close_open`) dùng transaction + `FOR UPDATE` để đóng khoảng `valid_to IS NULL` bằng thời điểm `T` và mở ngay khoảng tiếp theo từ `[T, Đến)`.
+
+Số lượng là số nguyên theo đơn vị cơ sở. Sau khi sản phẩm có dòng phiếu, không đổi đơn vị cơ sở. Ngày phiếu không ở tương lai; lùi ngày dùng để chọn giá, không tái tính tồn lịch sử — ghi sổ luôn xét số dư hiện tại. Danh mục kho đã ngừng sử dụng (`is_active = 0`) không thể chọn khi lập sản phẩm hoặc phiếu mới nhưng giữ nguyên toàn vẹn lịch sử chứng từ đã phát sinh.
+
+## 5. Route và quyền
+
+Tất cả route nghiệp vụ cần đăng nhập. POST thay đổi dữ liệu cần CSRF; ẩn nút không thay thế kiểm tra quyền ở server. Mọi request đều truy vấn trạng thái `is_active` và quyền hiện hành trong DB; tài khoản bị khóa bị vô hiệu phiên ngay ở request kế tiếp.
+
+| Route | Phương thức / chức năng | Quyền |
+|---|---|---|
+| `/login` | GET/POST đăng nhập (chặn tài khoản bị khóa `is_active = 0`) | Công khai |
+| `/logout` | POST đăng xuất, cần CSRF | Đã đăng nhập |
+| `/dashboard` | GET dashboard | `dashboard.view` |
+| `/products` | GET tìm kiếm/lọc/phân trang DB (`per_page` 5/10/20/50) và `?export=csv` | `products.view` |
+| `/products/create`, `/products/edit?id=…` | GET/POST tạo/sửa | `products.manage` |
+| `/products/delete` | POST xóa sản phẩm chưa có dữ liệu tham chiếu | `products.manage` |
+| `/categories` | GET danh mục sản phẩm | `categories.view` |
+| `/categories/create`, `/categories/edit?id=…`, `/categories/delete` | Tạo/sửa; POST xóa | `categories.manage` |
+| `/warehouse-catalog?tab=warehouses\|locations\|lots\|units` | GET xem / POST thêm, sửa inline (`update`), ngừng dùng (`toggle`), xóa an toàn (`delete`) | `warehouse.manage` |
+| `/prices` | GET lịch sử (lọc sản phẩm/loại giá) / POST `create` hoặc `close_open` | GET: `prices.view`; POST: thêm `prices.manage` |
+| `/inventory` | GET tồn theo sản phẩm/kho/vị trí/lô + đối soát tồn + `?export=csv` | `inventory.view` |
+| `/inventory/movements` | GET sổ biến động kho chỉ đọc (phân trang DB, lọc, `?export=csv`) | `inventory.view` |
+| `/documents` | GET danh sách phiếu (hiển thị số dòng, tổng tiền, `per_page`) | `documents.view` |
+| `/documents/create?type=receipt` | GET/POST lập phiếu nhập | `receipts.create` |
+| `/documents/create?type=issue` | GET/POST lập phiếu xuất | `issues.create` |
+| `/documents/show?id=…` | GET chi tiết phiếu | `documents.view` |
+| `/documents/post` | POST ghi sổ | `receipts.post` hoặc `issues.post` theo loại phiếu |
+| `/documents/cancel` | POST hủy nháp | `receipts.create` hoặc `issues.create` theo loại phiếu |
+| `/documents/print?id=…` | GET in phiếu đã ghi sổ | `documents.view` và `documents.print` |
+| `/access?tab=permissions\|users\|roles\|audit` | GET xem / POST phân quyền, CRUD/khóa-mở/đổi mật khẩu tài khoản, tạo/đổi tên nhóm, xem nhật ký `permission_audit_logs` | `access.manage` |
+
+Thứ tự quyết định quyền: **Từ chối riêng > Cho phép riêng > Hợp quyền các nhóm > Từ chối mặc định**. Chọn “Kế thừa nhóm” xóa ngoại lệ tài khoản. Thay đổi áp dụng từ request tiếp theo; không cần đăng nhập lại. Hệ thống bảo vệ không cho tự thu hồi `access.manage`, tự khóa tài khoản đang đăng nhập, hoặc làm mất tài khoản hoạt động cuối cùng có quyền `access.manage`.
+
+## 6. Cấu trúc chính
 
 ```text
-php_admin_product_manager/
-├── app/
-│   ├── public/
-│   │   ├── index.php                 # Front controller & router chính
-│   │   ├── .htaccess                 # Cấu hình rewrite URL cho Apache
-│   │   ├── assets/
-│   │   │   ├── css/admin.css         # Giao diện responsive
-│   │   │   └── js/admin.js           # Client-side validation
-│   │   └── uploads/products/         # Thư mục lưu trữ hình ảnh tải lên
-│   ├── src/
-│   │   ├── config.php                # Cấu hình hệ thống & biến môi trường
-│   │   ├── db.php                    # Kết nối MySQL PDO Singleton
-│   │   ├── helpers.php               # Helper CSRF, Flash, Upload file
-│   │   ├── auth.php                  # Xử lý xác thực admin (BCRYPT)
-│   │   ├── category_repository.php   # Nghiệp vụ danh mục
-│   │   ├── brand_repository.php      # Nghiệp vụ thương hiệu
-│   │   ├── product_repository.php    # Nghiệp vụ sản phẩm & gallery
-│   │   ├── inventory_repository.php  # Nghiệp vụ nhập/xuất kho
-│   │   ├── customer_repository.php   # Nghiệp vụ khách hàng
-│   │   ├── order_repository.php      # Nghiệp vụ đơn hàng & chi tiết đơn
-│   │   ├── export_service.php        # Dịch vụ xuất file CSV / Excel UTF-8 BOM
-│   │   ├── activity_log_repository.php # Ghi nhận nhật ký audit log
-│   │   ├── password_reset_repository.php # Xử lý token quên mật khẩu
-│   │   └── api_controller.php        # Xử lý và điều phối REST API JSON
-│   ├── views/
-│   │   ├── layouts/ (header, footer)
-│   │   ├── auth/ (login, forgot_password, reset_password)
-│   │   ├── dashboard/
-│   │   ├── categories/
-│   │   ├── brands/
-│   │   ├── products/
-│   │   ├── inventory/
-│   │   ├── customers/
-│   │   ├── orders/
-│   │   └── activity_logs/
-│   ├── tests/
-│   │   └── test_all_cases.php        # Bộ kiểm thử tự động 65 Test Cases
-│   └── migrate_schema.php            # Script tự động di chuyển CSDL
-├── database/
-│   └── init.sql                      # CSDL ban đầu & seed data
-├── docker/
-│   └── php/Dockerfile
-├── .env                              # Biến môi trường
-├── docker-compose.yml
-└── README.md
+app/public/index.php                Router và xử lý request
+app/public/assets/                  CSS, JavaScript, định dạng in
+app/src/                            PDO, xác thực, quyền, retry deadlock, repository/nghiệp vụ
+app/views/                          Giao diện sản phẩm, kho, biến động, giá, phiếu, phân quyền (E7)
+database/init.sql                   Schema (001 + 002) + dữ liệu demo cho cài mới
+database/migrations/001_inventory_access.sql
+                                    Nâng cấp database ba bảng cũ lên kho & RBAC, chạy một lần
+database/migrations/002_e7_access_and_catalog.sql
+                                    Nâng cấp E7 (admins.is_active, permission_audit_logs, danh mục is_active)
+docs/DE_XUAT_MO_RONG.md              Đặc tả và giao diện mẫu
+docs/BAI_TAP_SINH_VIEN.md            Bài thực hành và tiêu chí nghiệm thu
+docs/BAO_CAO_NGHIEM_THU.md           Báo cáo thiết kế, quy tắc nghiệp vụ, ERD, ma trận quyền & ca kiểm thử
+tests/integration.php               Bộ test tích hợp chuẩn (70 checks) trên admin_product_test
+tests/integration_extended.php      Bộ test mở rộng (deadlock retry, close_open, E7, đối soát)
+tests/http_smoke.py                 Kiểm thử HTTP đọc trang, CSRF 419 và chặn phân quyền (31 checks)
+tests/concurrency_test.py           Kiểm thử cạnh tranh 2 session độc lập & vô hiệu phiên khi khóa tài khoản
+tests/seed_practice.php             Script CLI nạp dữ liệu thực hành (>= 35 SP / 3 danh mục, nhiều kho/lô/giá)
 ```
 
----
+Tài khoản nằm trong `admins`; RBAC & kiểm toán dùng `roles`, `permissions`, `user_roles`, `role_permissions`, `user_permissions`, `permission_audit_logs`. Tồn dùng `stock_balances` theo khóa sản phẩm/vị trí/lô; mọi thay đổi tồn qua `inventory_documents`, `inventory_lines`, `stock_movements`. Giá nằm trong `product_prices`.
 
-## 3. Thiết kế database
+## 7. Kiểm tra và giới hạn còn lại
 
-Database gồm 9 bảng chính:
-
-```text
-admins
-categories
-brands
-products
-product_images
-inventory_logs
-customers
-orders
-order_items
-activity_logs
-password_resets
-```
-
-### 3.1. Bảng admins
-Lưu trữ tài khoản quản trị:
-- `id`, `username`, `email`, `password_hash` (BCRYPT), `full_name`, `created_at`, `updated_at`.
-- Tài khoản mặc định: `admin` / `admin123`.
-
-### 3.2. Bảng categories
-Lưu trữ danh mục:
-- `id`, `name` (UNIQUE), `description`, `status`, `created_at`, `updated_at`.
-
-### 3.3. Bảng brands
-Lưu trữ thương hiệu / hãng sản xuất:
-- `id`, `name` (UNIQUE), `description`, `status`, `created_at`, `updated_at`.
-
-### 3.4. Bảng products
-Lưu trữ sản phẩm:
-- `id`, `category_id` (FK categories), `brand_id` (FK brands), `name`, `sku` (UNIQUE), `description`, `quantity`, `unit_price`, `image_path`, `status`, `created_at`, `updated_at`.
-
-### 3.5. Bảng product_images
-Bộ sưu tập nhiều ảnh cho sản phẩm:
-- `id`, `product_id` (FK products ON DELETE CASCADE), `image_path`, `sort_order`, `created_at`.
-
-### 3.6. Bảng inventory_logs
-Nhật ký nhập / xuất kho:
-- `id`, `product_id` (FK products), `admin_id` (FK admins), `type` ('IN' hoặc 'OUT'), `quantity`, `note`, `created_at`.
-
-### 3.7. Bảng customers
-Quản lý khách hàng:
-- `id`, `name`, `email` (UNIQUE), `phone`, `address`, `status`, `created_at`, `updated_at`.
-
-### 3.8. Bảng orders & order_items
-Quản lý đơn hàng và từng dòng sản phẩm:
-- `orders`: `id`, `order_code` (UNIQUE), `customer_id` (FK customers), `total_amount`, `status` ('pending', 'processing', 'completed', 'cancelled'), `notes`, `created_at`, `updated_at`.
-- `order_items`: `id`, `order_id` (FK orders ON DELETE CASCADE), `product_id` (FK products), `quantity`, `unit_price`, `subtotal`, `created_at`.
-
-### 3.9. Bảng activity_logs & password_resets
-- `activity_logs`: `id`, `admin_id`, `action`, `description`, `ip_address`, `created_at`.
-- `password_resets`: `id`, `email`, `token` (UNIQUE 64 chars), `expires_at`, `created_at`.
-
----
-
-## 4. Chạy project với Docker
-
-Khởi động các container:
-```bash
-docker compose up -d
-```
-
-Kiểm tra trạng thái container:
-```bash
-docker ps
-```
-
-Truy cập:
-- **Trang Admin**: [http://localhost:8090](http://localhost:8090)
-  - Tài khoản: `admin`
-  - Mật khẩu: `admin123`
-- **phpMyAdmin**: [http://localhost:8091](http://localhost:8091)
-  - Server: `mysql` | User: `admin_user` | Pass: `admin_password` | DB: `admin_product_db`
-
----
-
-## 5. Tự động kiểm thử (Automated Test Suite)
-
-Dự án tích hợp bộ kiểm thử tự động gồm **65 Test Cases** bao quát toàn bộ chức năng:
+Chạy dịch vụ trước, sau đó chạy bộ kiểm thử từ thư mục gốc:
 
 ```bash
-docker exec php_admin_product_app php /var/www/html/tests/test_all_cases.php
+docker compose up -d --build
+sh tests/run.sh
+python tests/http_smoke.py http://localhost:8090
+python tests/concurrency_test.py http://localhost:8090
 ```
 
-### Các nhóm kiểm thử chính:
-1. **Module 1 - Authentication**: Đăng nhập trống, sai tài khoản, sai mật khẩu, đăng nhập chuẩn BCRYPT.
-2. **Module 2 - Category**: Trùng tên danh mục, thêm, sửa, ràng buộc toàn vẹn khi có sản phẩm liên kết, xóa an toàn.
-3. **Module 2B - Brand**: Trùng tên thương hiệu, thêm, sửa, kiểm tra sản phẩm thuộc thương hiệu, xóa thương hiệu.
-4. **Module 3 - Product**: Validate tên rỗng, danh mục rỗng, số lượng âm, đơn giá âm, trùng SKU, phân trang, tìm kiếm, lọc danh mục/thương hiệu.
-5. **Module 3B - Product Gallery**: Thêm nhiều ảnh vào bộ sưu tập, xóa từng ảnh, cascade khi xóa sản phẩm.
-6. **Module 3C - Inventory**: Nhập kho tăng tồn, xuất kho giảm tồn, chặn xuất kho quá số lượng hiện có, phân trang lịch sử kho.
-7. **Module 3D - Customer**: Kiểm tra trùng email, thêm, sửa, tìm kiếm và phân trang khách hàng, xóa khách hàng.
-8. **Module 3E - Orders**: Tạo đơn tự động sinh mã `ORD-...`, trừ tồn kho, lưu chi tiết từng sản phẩm, chặn đặt hàng vượt quá tồn kho, tự động hoàn kho khi đơn bị hủy (`cancelled`).
-9. **Module 3F - CSV Export**: Xuất file CSV có UTF-8 BOM, hiển thị tiếng Việt có dấu chuẩn xác trên Excel, xử lý dấu phẩy và ngoặc kép.
-10. **Module 3G - Activity Logs**: Tự động ghi lại nhật ký thao tác và truy xuất lịch sử audit.
-11. **Module 3H - Password Reset**: Tạo token 64 ký tự, xác thực thời hạn token, áp dụng mật khẩu mới bằng BCRYPT, thu hồi token sau khi sử dụng.
-12. **Module 3I - REST API**: Kiểm tra các endpoint JSON (`/api/categories`, `/api/brands`, `/api/products`, `/api/orders`), mã trạng thái HTTP 200, 201, 400, 404.
-13. **Module 4, 5, 6**: Dashboard metrics, CSRF token security, Flash messages.
+Khi chạy test mở rộng & seeder trong container PHP đối với `admin_product_test` hoặc `admin_product_db`:
+- Test tích hợp mở rộng (`DB_DATABASE=admin_product_test`): `tests/integration_extended.php`
+- Nạp dữ liệu thực hành (tối thiểu 35 sản phẩm qua 3 danh mục, nhiều kho/vị trí/lô/giá): `tests/seed_practice.php`
 
----
+### Giới hạn còn lại (chưa triển khai)
 
-## 6. Hướng phát triển tiếp (Trạng thái triển khai)
+Đúng theo yêu cầu trung thực phạm vi bài làm, các phần mở rộng sau **chưa được triển khai**:
+- **E1**: Chưa có giới hạn dữ liệu / phân quyền chi tiết theo từng kho.
+- **E2**: Chưa có quy trình trình duyệt (`submitted`) hay chặn người lập tự duyệt / tự ghi sổ phiếu.
+- **E3**: Chưa có nghiệp vụ phiếu chuyển kho nội bộ giữa 2 kho/vị trí.
+- **E4**: Chưa có nghiệp vụ đảo phiếu / trả hàng.
+- **E5**: Chưa có quy đổi nhiều đơn vị tính (thùng/hộp/cái).
+- **E6**: Chưa có tính giá vốn FIFO / bình quân gia quyền & khóa kỳ kế toán, kiểm kê, thuế hay công nợ.
 
-Toàn bộ các tính năng định hướng đã được triển khai hoàn chỉnh vào hệ thống:
-
-- [x] **Thêm nhiều ảnh cho một sản phẩm**: Bảng `product_images`, upload ảnh gallery, quản lý và xóa từng ảnh.
-- [x] **Thêm thương hiệu**: Bảng `brands`, quản lý CRUD hãng, lọc sản phẩm theo thương hiệu.
-- [x] **Thêm nhập kho/xuất kho**: Bảng `inventory_logs`, giao dịch xuất nhập, cập nhật tồn kho an toàn.
-- [x] **Thêm đơn hàng**: Bảng `orders` & `order_items`, tạo đơn, quản lý trạng thái, tự động trừ/hoàn kho.
-- [x] **Thêm khách hàng**: Bảng `customers`, quản lý thông tin khách hàng, kiểm tra trùng lặp email.
-- [x] **Thêm phân trang**: Đã triển khai linh hoạt trên toàn bộ các danh sách sản phẩm, khách hàng, đơn hàng, kho.
-- [x] **Thêm export Excel**: Hỗ trợ xuất file CSV định dạng UTF-8 BOM chuẩn cho Excel.
-- [x] **Thêm REST API**: Cung cấp đầy đủ các endpoint JSON cho products, categories, brands, orders kèm CORS.
-- [x] **Thay SHA256 bằng password_hash()**: Sử dụng chuẩn BCRYPT hiện đại nhất kèm cơ chế auto-upgrade.
-- [x] **Thêm quên mật khẩu qua email**: Hệ thống sinh token bảo mật 64 ký tự có hạn dùng 1 giờ.
-- [x] **Thêm log hoạt động admin**: Bảng `activity_logs`, ghi nhận mọi hành động nhạy cảm trên hệ thống.
+Nếu không kết nối MySQL, kiểm tra log service và `DB_HOST=mysql`. Nếu database đang có volume nhưng thiếu bảng mới, làm theo mục migration (`001` và `002`) thay vì chạy lại `init.sql`. Nếu trùng cổng, đổi cổng phía host trong `docker-compose.yml`; không đổi cổng nội bộ MySQL `3306` trong cấu hình ứng dụng.

@@ -1,9 +1,10 @@
 <?php
+date_default_timezone_set("Asia/Ho_Chi_Minh");
 if (!function_exists('env_value')) {
-    function env_value(string $key, string $default = ""): string {
-        $value = getenv($key);
-        return $value !== false ? $value : $default;
-    }
+function env_value(string $key, string $default = ""): string {
+    $value = getenv($key);
+    return $value !== false ? $value : $default;
+}
 }
 return [
     "app" => [

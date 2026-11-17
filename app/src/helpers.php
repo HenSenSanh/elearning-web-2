@@ -2,18 +2,35 @@
 function e(?string $value): string { return htmlspecialchars($value ?? "", ENT_QUOTES, "UTF-8"); }
 function redirect(string $path): void { header("Location: " . $path); exit; }
 function is_post(): bool { return $_SERVER["REQUEST_METHOD"] === "POST"; }
-
-function set_flash(string $type, string $message): void {
-    $_SESSION["_flash"][$type] = $message;
+function require_post(): void {
+    if (!is_post()) { http_response_code(405); header('Allow: POST'); exit('Chức năng yêu cầu POST.'); }
 }
-
-function get_flash(string $type): ?string {
-    if (!empty($_SESSION["_flash"][$type])) {
-        $msg = $_SESSION["_flash"][$type];
-        unset($_SESSION["_flash"][$type]);
-        return $msg;
+function pagination_meta(int $total, int $page = 1, int $perPage = 20): array {
+    $perPage = max(1, min(100, $perPage));
+    $pages = max(1, (int)ceil($total / $perPage));
+    $page = max(1, min($pages, $page));
+    return ['total'=>$total,'page'=>$page,'per_page'=>$perPage,'pages'=>$pages,'offset'=>($page-1)*$perPage];
+}
+function pagination_links(array $result, string $path, array $query = []): string {
+    $page = $result['page']; $pages = $result['pages'];
+    $html = '<nav class="pagination" aria-label="Phân trang"><span>' . number_format($result['total']) . ' bản ghi · Trang ' . $page . '/' . $pages . '</span>';
+    $numbers = array_unique(array_merge([1, $page-1, $page, $page+1, $pages]));
+    sort($numbers); $previous = 0;
+    foreach ($numbers as $number) {
+        if ($number < 1 || $number > $pages) continue;
+        if ($previous && $number > $previous + 1) $html .= '<span>…</span>';
+        $url = $path . '?' . http_build_query(array_merge($query, ['page'=>$number,'per_page'=>$result['per_page']]));
+        $html .= '<a class="btn small ' . ($number === $page ? 'primary' : 'secondary') . '"' . ($number === $page ? ' aria-current="page"' : '') . ' href="' . e($url) . '">' . $number . '</a>';
+        $previous = $number;
     }
-    return null;
+    return $html . '</nav>';
+}
+function valid_datetime(string $value): string {
+    foreach (['Y-m-d\\TH:i','Y-m-d H:i:s'] as $format) {
+        $date = DateTimeImmutable::createFromFormat('!' . $format, $value);
+        if ($date && $date->format($format) === $value) return $date->format('Y-m-d H:i:s');
+    }
+    throw new InvalidArgumentException('Thời gian không hợp lệ.');
 }
 
 function csrf_token(): string {
@@ -25,8 +42,8 @@ function csrf_field(): string {
 }
 function verify_csrf(): void {
     $token = $_POST["_csrf_token"] ?? "";
-    if (empty($_SESSION["_csrf_token"]) || !hash_equals($_SESSION["_csrf_token"], $token)) {
-        http_response_code(419); die("CSRF token không hợp lệ.");
+    if (!is_string($token) || empty($_SESSION["_csrf_token"]) || !is_string($_SESSION["_csrf_token"]) || !hash_equals($_SESSION["_csrf_token"], $token)) {
+        header("HTTP/1.1 419 Page Expired", true, 419); die("CSRF token không hợp lệ.");
     }
 }
 function upload_product_image(array $file): ?string {
@@ -43,30 +60,65 @@ function upload_product_image(array $file): ?string {
     if (!move_uploaded_file($file["tmp_name"], $dir . "/" . $name)) throw new RuntimeException("Không thể lưu hình ảnh.");
     return "uploads/products/" . $name;
 }
-
-function upload_product_gallery_images(array $files): array {
-    $paths = [];
-    if (!isset($files["name"]) || !is_array($files["name"])) return $paths;
-    $count = count($files["name"]);
-    for ($i = 0; $i < $count; $i++) {
-        if ($files["error"][$i] === UPLOAD_ERR_NO_FILE) continue;
-        $file = [
-            "name" => $files["name"][$i],
-            "type" => $files["type"][$i],
-            "tmp_name" => $files["tmp_name"][$i],
-            "error" => $files["error"][$i],
-            "size" => $files["size"][$i]
-        ];
-        $path = upload_product_image($file);
-        if ($path) {
-            $paths[] = $path;
-        }
-    }
-    return $paths;
-}
-
 function delete_product_image(?string $imagePath): void {
     if (!$imagePath) return;
     $fullPath = __DIR__ . "/../public/" . $imagePath;
     if (is_file($fullPath)) unlink($fullPath);
+}
+
+/**
+ * Execute an entire transaction callback with bounded retry on MySQL deadlock/lock timeout.
+ */
+function run_with_deadlock_retry(PDO $pdo, callable $callback, int $maxRetries = 2): mixed {
+    $attempt = 0;
+    while (true) {
+        $attempt++;
+        try {
+            $pdo->beginTransaction();
+            $result = $callback($pdo);
+            $pdo->commit();
+            return $result;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $isDeadlock = false;
+            if ($e instanceof PDOException) {
+                $sqlState = (string)($e->errorInfo[0] ?? $e->getCode());
+                $driverCode = (int)($e->errorInfo[1] ?? 0);
+                if ($sqlState === "40001" || $driverCode === 1213 || $driverCode === 1205) {
+                    $isDeadlock = true;
+                }
+            }
+            if ($isDeadlock && $attempt <= $maxRetries) {
+                usleep(50000 * $attempt);
+                continue;
+            }
+            throw $e;
+        }
+    }
+}
+
+/**
+ * Stream UTF-8 BOM CSV directly without buffering entire result set into view HTML.
+ */
+function csv_download(string $filename, array $headers, array $rows): void {
+    header('Content-Type: text/csv; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="' . preg_replace('/[^A-Za-z0-9_.\-]/', '_', $filename) . '"');
+    $out = fopen('php://output', 'wb');
+    fwrite($out, "\xEF\xBB\xBF");
+    fputcsv($out, $headers);
+    foreach ($rows as $row) {
+        $safeRow = [];
+        foreach ($row as $cell) {
+            $str = (string)($cell ?? '');
+            if ($str !== '' && in_array($str[0], ['=', '+', '-', '@', "\t", "\r"], true) && !preg_match('/^-\d+(?:\.\d+)?$/', $str)) {
+                $str = "'" . $str;
+            }
+            $safeRow[] = $str;
+        }
+        fputcsv($out, $safeRow);
+    }
+    fclose($out);
+    exit;
 }

@@ -19,13 +19,8 @@ function category_delete(int $id): void {
     $stmt->execute(["id"=>$id]);
 }
 function category_count(): int { return (int) db()->query("SELECT COUNT(*) FROM categories")->fetchColumn(); }
-function category_exists_name(string $name, int $excludeId = 0): bool {
-    $stmt = db()->prepare("SELECT COUNT(*) FROM categories WHERE LOWER(name) = LOWER(:n) AND id != :id");
-    $stmt->execute(["n" => trim($name), "id" => $excludeId]);
-    return (int) $stmt->fetchColumn() > 0;
-}
-function category_has_products(int $id): bool {
-    $stmt = db()->prepare("SELECT COUNT(*) FROM products WHERE category_id = :id");
-    $stmt->execute(["id" => $id]);
-    return (int) $stmt->fetchColumn() > 0;
+function category_paginate(int $page = 1, int $perPage = 20): array {
+    $result = pagination_meta(category_count(), $page, $perPage);
+    $result['items'] = db()->query('SELECT * FROM categories ORDER BY id DESC LIMIT ' . $result['per_page'] . ' OFFSET ' . $result['offset'])->fetchAll();
+    return $result;
 }
