@@ -42,10 +42,12 @@ docker compose logs mysql
 
 Đợi MySQL khởi tạo xong trước khi đăng nhập:
 
-- Trang quản trị: [http://localhost:8090](http://localhost:8090).
-- phpMyAdmin: [http://localhost:8091](http://localhost:8091), server `mysql`, tài khoản ứng dụng trong `.env`.
+- Trang quản trị: [http://localhost:8090](http://localhost:8090) (dùng bảng tài khoản ứng dụng bên dưới).
+- phpMyAdmin: [http://localhost:8091](http://localhost:8091), server `mysql` (cấu hình sẵn trong `docker-compose.yml`), đăng nhập bằng tài khoản MySQL mặc định trong `.env` (không dùng bảng tài khoản web bên dưới):
+  - Tài khoản ứng dụng: `admin_user` / `admin_password` (quản lý database ứng dụng `admin_product_db`)
+  - Tài khoản root: `root` / `root_password` (toàn quyền MySQL)
 
-Các tài khoản sau chỉ phục vụ dữ liệu minh họa của **cài mới**:
+Các tài khoản sau chỉ dùng để đăng nhập **trang quản trị web (`http://localhost:8090`)** với dữ liệu minh họa của **cài mới**:
 
 | Tài khoản | Mật khẩu mẫu | Nhóm | Khả năng chính |
 |---|---|---|---|
