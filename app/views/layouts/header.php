@@ -7,7 +7,7 @@ $currentPath = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 <div class="admin-layout"><aside class="sidebar">
 <div class="brand"><div class="brand-icon">K</div><div><strong>Kho & Sản phẩm</strong><small>PHP · Bài thực hành mở rộng</small></div></div>
 <nav class="nav">
-<?php foreach ([['/dashboard','dashboard.view','Tổng quan tồn kho'],['/inventory','inventory.view','Tồn kho theo vị trí'],['/inventory/movements','inventory.view','Sổ biến động kho'],['/documents','documents.view','Phiếu nhập / xuất'],['/products','products.view','Sản phẩm'],['/categories','categories.view','Danh mục sản phẩm'],['/prices','prices.view','Giá theo thời gian'],['/warehouse-catalog','warehouse.manage','Danh mục kho'],['/access','access.manage','Nhóm & phân quyền']] as [$href,$permission,$label]): ?>
+<?php foreach ([['/dashboard','dashboard.view','Tổng quan tồn kho'],['/inventory','inventory.view','Tồn kho theo vị trí'],['/inventory/movements','inventory.view','Sổ biến động kho'],['/documents','documents.view','Phiếu nhập / xuất'],['/products','products.view','Sản phẩm'],['/categories','categories.view','Danh mục sản phẩm'],['/prices','prices.view','Giá theo thời gian'],['/warehouse-catalog','warehouse.manage','Danh mục kho'],['/ai','ai.ask','Hỏi dữ liệu AI'],['/reports','reports.view','Báo cáo Markdown / PDF'],['/access','access.manage','Nhóm & phân quyền']] as [$href,$permission,$label]): ?>
 <?php $isActive = ($href === '/inventory') ? ($currentPath === '/inventory') : str_starts_with($currentPath,$href); ?>
 <?php if (can($permission)): ?><a class="<?= $isActive ? 'active' : '' ?>" href="<?= e($href) ?>"><?= e($label) ?></a><?php endif; ?>
 <?php endforeach; ?>

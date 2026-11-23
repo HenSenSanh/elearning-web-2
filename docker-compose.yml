@@ -4,14 +4,37 @@ services:
       context: .
       dockerfile: docker/php/Dockerfile
     container_name: php_admin_product_app
+    restart: unless-stopped
     ports:
       - "8090:80"
     volumes:
       - ./app:/var/www/html
+      - ./reports:/var/www/reports
     env_file:
       - .env
     depends_on:
       - mysql
+      - rabbitmq
+      - ollama
+    networks:
+      - admin_product_network
+
+  report-worker:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: php_admin_product_report_worker
+    restart: unless-stopped
+    command: ["php", "/var/www/html/bin/report_worker.php"]
+    volumes:
+      - ./app:/var/www/html
+      - ./reports:/var/www/reports
+    env_file:
+      - .env
+    depends_on:
+      - mysql
+      - rabbitmq
+      - ollama
     networks:
       - admin_product_network
 
@@ -19,6 +42,8 @@ services:
     image: mysql:8.0
     container_name: php_admin_product_mysql
     restart: always
+    env_file:
+      - .env
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
       MYSQL_DATABASE: ${DB_DATABASE}
@@ -29,6 +54,20 @@ services:
     volumes:
       - mysql_admin_product_data:/var/lib/mysql
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - admin_product_network
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: php_admin_product_rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-report_worker}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    ports:
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - admin_product_network
 
@@ -46,8 +85,28 @@ services:
     networks:
       - admin_product_network
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: php_admin_product_ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - admin_product_network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
 volumes:
   mysql_admin_product_data:
+  ollama_data:
+  rabbitmq_data:
 
 networks:
   admin_product_network:

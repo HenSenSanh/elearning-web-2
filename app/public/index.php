@@ -7,6 +7,8 @@ require_once __DIR__ . '/../src/product_repository.php';
 require_once __DIR__ . '/../src/price_repository.php';
 require_once __DIR__ . '/../src/warehouse_repository.php';
 require_once __DIR__ . '/../src/inventory_repository.php';
+require_once __DIR__ . '/../src/ai_service.php';
+require_once __DIR__ . '/../src/ai_job_repository.php';
 
 $path = rtrim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/') ?: '/';
 function view(string $view, array $data = []): void {
@@ -269,6 +271,193 @@ try {
                 'error'=>$error,
                 'message'=>''
             ]); break;
+        case '/ai':
+            require_permission('ai.ask');
+            $error = '';
+            $oldQuestion = '';
+            $models = ai_ollama_list_models();
+            $selectedModel = $models[0] ?? 'qwen2.5:3b';
+            $actorId = (int)($_SESSION['admin_id'] ?? 0);
+            $isAjax = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest'
+                || str_contains((string)($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
+            if (is_post()) {
+                verify_csrf();
+                $oldQuestion = trim((string)($_POST['question'] ?? ''));
+                $selectedModel = ai_resolve_model((string)($_POST['model'] ?? ''));
+                if ($oldQuestion === '' || mb_strlen($oldQuestion, 'UTF-8') > 500) {
+                    $error = 'Câu hỏi cần từ 1 đến 500 ký tự.';
+                    if ($isAjax) {
+                        http_response_code(422);
+                        header('Content-Type: application/json; charset=UTF-8');
+                        echo json_encode(['error' => $error], JSON_UNESCAPED_UNICODE);
+                        exit;
+                    }
+                } else {
+                    $jobId = ai_job_create($actorId, 'question', ['question' => $oldQuestion, 'model' => $selectedModel]);
+                    try {
+                        ai_queue_publish($jobId);
+                        if ($isAjax) {
+                            header('Content-Type: application/json; charset=UTF-8');
+                            echo json_encode([
+                                'job_id' => $jobId,
+                                'question' => $oldQuestion,
+                                'model' => $selectedModel,
+                                'status' => 'queued',
+                                'status_label' => ai_job_status_label('queued'),
+                            ], JSON_UNESCAPED_UNICODE);
+                            exit;
+                        }
+                        saved('Đã đưa câu hỏi vào hàng đợi AI (' . $selectedModel . ').', '/ai/jobs?id=' . $jobId);
+                    } catch (Throwable $e) {
+                        ai_job_mark_failed($jobId, 'Không thể gửi tác vụ tới RabbitMQ: ' . $e->getMessage());
+                        $error = 'Không thể kết nối hàng đợi RabbitMQ. Hãy kiểm tra container rabbitmq.';
+                        if ($isAjax) {
+                            http_response_code(503);
+                            header('Content-Type: application/json; charset=UTF-8');
+                            echo json_encode(['error' => $error], JSON_UNESCAPED_UNICODE);
+                            exit;
+                        }
+                    }
+                }
+            }
+            $recentJobs = ai_job_list_for_user($actorId, 'question', 20);
+            view('ai/index', [
+                'title' => 'Trợ lý dữ liệu kho AI',
+                'error' => $error,
+                'oldQuestion' => $oldQuestion,
+                'models' => $models,
+                'selectedModel' => $selectedModel,
+                'allowedTables' => ai_allowed_tables(),
+                'jobs' => $recentJobs,
+                'latestJob' => $recentJobs[0] ?? null,
+            ]); break;
+        case '/ai/jobs':
+            require_admin();
+            if (!can('ai.ask') && !can('reports.view')) {
+                http_response_code(403);
+                view('errors/index', ['title' => 'Không đủ quyền', 'error' => 'Bạn cần quyền ai.ask hoặc reports.view để xem tác vụ AI.']);
+                break;
+            }
+            $actorId = (int)($_SESSION['admin_id'] ?? 0);
+            $jobId = trim((string)($_GET['id'] ?? ''));
+            $activeJob = null;
+            if ($jobId !== '') {
+                $activeJob = ai_job_find_for_user($jobId, $actorId);
+                if (!$activeJob) {
+                    http_response_code(404);
+                    view('errors/index', ['title' => 'Không tìm thấy tác vụ', 'error' => 'Tác vụ không tồn tại hoặc không thuộc tài khoản của bạn.']);
+                    break;
+                }
+            }
+            view('ai/jobs', [
+                'title' => 'Tác vụ AI & Báo cáo',
+                'activeJob' => $activeJob,
+                'jobs' => ai_job_list_for_user($actorId, null, 30),
+            ]); break;
+        case '/ai/status':
+            require_admin();
+            if (!can('ai.ask') && !can('reports.view')) {
+                http_response_code(403);
+                header('Content-Type: application/json; charset=UTF-8');
+                echo json_encode(['error' => 'Forbidden']);
+                exit;
+            }
+            header('Content-Type: application/json; charset=UTF-8');
+            $actorId = (int)($_SESSION['admin_id'] ?? 0);
+            $jobId = trim((string)($_GET['id'] ?? ''));
+            if ($jobId !== '') {
+                $job = ai_job_find_for_user($jobId, $actorId);
+                if (!$job) {
+                    http_response_code(404);
+                    echo json_encode(['error' => 'Not found']);
+                    exit;
+                }
+                echo json_encode([
+                    'job' => [
+                        'id' => $job['id'],
+                        'job_type' => $job['job_type'],
+                        'status' => $job['status'],
+                        'status_label' => ai_job_status_label($job['status']),
+                        'error_message' => $job['error_message'],
+                        'created_at' => $job['created_at'],
+                        'finished_at' => $job['finished_at'],
+                        'payload' => $job['payload_data'],
+                        'result' => $job['status'] === 'succeeded' ? $job['result_data'] : null,
+                    ],
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+            $type = trim((string)($_GET['type'] ?? ''));
+            $jobs = ai_job_list_for_user($actorId, in_array($type, ['question', 'report'], true) ? $type : null, 20);
+            echo json_encode([
+                'jobs' => array_map(static fn($j) => [
+                    'id' => $j['id'],
+                    'job_type' => $j['job_type'],
+                    'status' => $j['status'],
+                    'status_label' => ai_job_status_label($j['status']),
+                    'error_message' => $j['error_message'],
+                    'created_at' => $j['created_at'],
+                    'finished_at' => $j['finished_at'],
+                ], $jobs),
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        case '/reports':
+            require_permission('reports.view');
+            $error = '';
+            $models = ai_ollama_list_models();
+            $selectedModel = $models[0] ?? 'qwen2.5:3b';
+            $actorId = (int)($_SESSION['admin_id'] ?? 0);
+            if (is_post()) {
+                verify_csrf();
+                $slug = trim((string)($_POST['template'] ?? ''));
+                $selectedModel = ai_resolve_model((string)($_POST['model'] ?? ''));
+                try {
+                    report_validate_slug($slug);
+                    $jobId = ai_job_create($actorId, 'report', ['template' => $slug, 'model' => $selectedModel]);
+                    try {
+                        ai_queue_publish($jobId);
+                        saved('Đã đưa yêu cầu tạo báo cáo vào hàng đợi (' . $selectedModel . ').', '/reports');
+                    } catch (Throwable $e) {
+                        ai_job_mark_failed($jobId, 'Không thể gửi tác vụ tới RabbitMQ: ' . $e->getMessage());
+                        $error = 'Không thể kết nối hàng đợi RabbitMQ. Hãy kiểm tra container rabbitmq.';
+                    }
+                } catch (InvalidArgumentException $e) {
+                    $error = $e->getMessage();
+                }
+            }
+            view('reports/index', [
+                'title' => 'Báo cáo Markdown / PDF',
+                'templates' => report_list_templates(),
+                'models' => $models,
+                'selectedModel' => $selectedModel,
+                'jobs' => ai_job_list_for_user($actorId, 'report', 20),
+                'error' => $error,
+            ]); break;
+        case '/reports/download':
+            require_permission('reports.view');
+            $actorId = (int)($_SESSION['admin_id'] ?? 0);
+            $jobId = trim((string)($_GET['id'] ?? ''));
+            $format = ($_GET['format'] ?? 'pdf') === 'md' ? 'md' : 'pdf';
+            $job = ai_job_find_for_user($jobId, $actorId);
+            if (!$job || $job['job_type'] !== 'report' || $job['status'] !== 'succeeded') {
+                http_response_code(404);
+                exit('Không tìm thấy báo cáo hoặc báo cáo chưa hoàn tất.');
+            }
+            $config = require __DIR__ . '/../src/config.php';
+            $exportsBase = realpath($config['reports']['exports_dir']);
+            $filePath = $exportsBase !== false ? realpath($exportsBase . DIRECTORY_SEPARATOR . $job['id'] . '.' . $format) : false;
+            if ($filePath === false || !str_starts_with($filePath, $exportsBase . DIRECTORY_SEPARATOR) || !is_file($filePath)) {
+                http_response_code(404);
+                exit('Tệp báo cáo không tồn tại trên đĩa.');
+            }
+            $slug = preg_replace('/[^a-z0-9_]/', '_', (string)($job['payload_data']['template'] ?? 'report'));
+            $downloadName = $slug . '_' . substr($job['id'], 0, 8) . '.' . $format;
+            header('Content-Type: ' . ($format === 'pdf' ? 'application/pdf' : 'text/markdown; charset=UTF-8'));
+            header('Content-Disposition: attachment; filename="' . $downloadName . '"');
+            header('Content-Length: ' . (string)filesize($filePath));
+            header('X-Content-Type-Options: nosniff');
+            readfile($filePath);
+            exit;
         default: http_response_code(404); view('errors/index',['title'=>'Không tìm thấy trang','error'=>'404 - Đường dẫn không tồn tại.']);
     }
 } catch (InvalidArgumentException $e) {

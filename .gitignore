@@ -1,3 +1,6 @@
+.env
 .superpowers/
 docs/superpowers/
 doc/
+reports/exports/*.md
+reports/exports/*.pdf
