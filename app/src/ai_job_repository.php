@@ -92,6 +92,24 @@ function ai_job_mark_failed(string $id, string $errorMessage): void {
 }
 
 /**
+ * Mark jobs stuck in `running` longer than $staleSeconds (e.g. after a worker crash/OOM) as failed.
+ */
+function ai_job_recover_stale_running(int $staleSeconds = 600): int {
+    $staleSeconds = max(60, $staleSeconds);
+    $stmt = db()->prepare(
+        'UPDATE ai_jobs
+         SET status = "failed",
+             error_message = "Tác vụ bị gián đoạn quá thời gian xử lý (worker khởi động lại). Hãy thử gửi lại.",
+             finished_at = NOW()
+         WHERE status = "running"
+           AND started_at IS NOT NULL
+           AND started_at < DATE_SUB(NOW(), INTERVAL ? SECOND)'
+    );
+    $stmt->execute([$staleSeconds]);
+    return $stmt->rowCount();
+}
+
+/**
  * Publish a persistent job UUID message to durable RabbitMQ queue `ai_jobs`.
  */
 function ai_queue_publish(string $jobId): void {

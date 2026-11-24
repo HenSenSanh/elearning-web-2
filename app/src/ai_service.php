@@ -52,6 +52,23 @@ function ai_db(bool $reconnect = false): PDO {
 }
 
 /**
+ * Normalize Vietnamese text to lowercase ASCII for accent-insensitive lexical matching.
+ */
+function ai_normalize_vi(string $text): string {
+    $lower = mb_strtolower($text, 'UTF-8');
+    static $map = [
+        'à'=>'a','á'=>'a','ạ'=>'a','ả'=>'a','ã'=>'a','â'=>'a','ầ'=>'a','ấ'=>'a','ậ'=>'a','ẩ'=>'a','ẫ'=>'a','ă'=>'a','ằ'=>'a','ắ'=>'a','ặ'=>'a','ẳ'=>'a','ẵ'=>'a',
+        'è'=>'e','é'=>'e','ẹ'=>'e','ẻ'=>'e','ẽ'=>'e','ê'=>'e','ề'=>'e','ế'=>'e','ệ'=>'e','ể'=>'e','ễ'=>'e',
+        'ì'=>'i','í'=>'i','ị'=>'i','ỉ'=>'i','ĩ'=>'i',
+        'ò'=>'o','ó'=>'o','ọ'=>'o','ỏ'=>'o','õ'=>'o','ô'=>'o','ồ'=>'o','ố'=>'o','ộ'=>'o','ổ'=>'o','ỗ'=>'o','ơ'=>'o','ờ'=>'o','ớ'=>'o','ợ'=>'o','ở'=>'o','ỡ'=>'o',
+        'ù'=>'u','ú'=>'u','ụ'=>'u','ủ'=>'u','ũ'=>'u','ư'=>'u','ừ'=>'u','ứ'=>'u','ự'=>'u','ử'=>'u','ữ'=>'u',
+        'ỳ'=>'y','ý'=>'y','ỵ'=>'y','ỷ'=>'y','ỹ'=>'y',
+        'đ'=>'d',
+    ];
+    return strtr($lower, $map);
+}
+
+/**
  * Lexical RAG retrieval from app/src/ai/schema_context.md.
  * Keeps core rules and ranks business table chunks by keyword relevance.
  */
@@ -87,20 +104,21 @@ function ai_retrieve_schema_context(string $question): string {
     }
 
     $qLower = mb_strtolower($question, 'UTF-8');
+    $qNorm = ai_normalize_vi($question);
     $tokens = preg_split('/[^\p{L}\p{N}_]+/u', $qLower, -1, PREG_SPLIT_NO_EMPTY) ?: [];
 
     $hints = [
-        'categories' => ['danh mục', 'loại hàng', 'category', 'categories'],
-        'products' => ['sản phẩm', 'hàng hóa', 'mặt hàng', 'sku', 'tối thiểu', 'min_stock', 'product'],
-        'units' => ['đơn vị', 'đvt', 'unit', 'cái', 'hộp', 'thùng'],
+        'categories' => ['danh mục', 'danh muc', 'loại hàng', 'loai hang', 'category', 'categories'],
+        'products' => ['sản phẩm', 'san pham', 'hàng hóa', 'hang hoa', 'mặt hàng', 'mat hang', 'sku', 'tối thiểu', 'toi thieu', 'min_stock', 'product'],
+        'units' => ['đơn vị', 'don vi', 'đvt', 'unit', 'cái', 'hộp', 'thùng'],
         'warehouses' => ['kho', 'warehouse'],
-        'warehouse_locations' => ['vị trí', 'kệ', 'ô', 'bin', 'zone', 'rack', 'location', 'kho'],
-        'product_lots' => ['lô', 'hạn dùng', 'hết hạn', 'lot', 'expires'],
-        'stock_balances' => ['tồn', 'số dư', 'hiện tại', 'stock', 'balance', 'thiếu'],
-        'inventory_documents' => ['phiếu', 'chứng từ', 'nhập', 'xuất', 'ghi sổ', 'posted', 'đối tác', 'document'],
-        'inventory_lines' => ['dòng phiếu', 'chi tiết phiếu', 'nhập', 'xuất', 'đơn giá', 'line'],
-        'stock_movements' => ['biến động', 'lịch sử kho', 'xuất nhập', 'movement', 'tháng', 'ngày'],
-        'product_prices' => ['giá', 'bảng giá', 'giá bán', 'giá nhập', 'price'],
+        'warehouse_locations' => ['vị trí', 'vi tri', 'ô kệ', 'o ke', 'kệ', 'bin', 'zone', 'rack', 'location'],
+        'product_lots' => ['lô', 'hạn dùng', 'han dung', 'hạn sử dụng', 'han su dung', 'hết hạn', 'het han', 'lot', 'expires'],
+        'stock_balances' => ['tồn', 'số dư', 'so du', 'hiện tại', 'hien tai', 'stock', 'balance', 'thiếu', 'thieu', 'hết hàng', 'het hang'],
+        'inventory_documents' => ['phiếu', 'phieu', 'chứng từ', 'chung tu', 'nhập', 'xuất', 'ghi sổ', 'ghi so', 'posted', 'nháp', 'draft', 'đối tác', 'doi tac', 'partner', 'document'],
+        'inventory_lines' => ['dòng phiếu', 'chi tiết phiếu', 'nhập', 'xuất', 'đơn giá', 'don gia', 'unit_price', 'giá trị nhập', 'line'],
+        'stock_movements' => ['biến động', 'bien dong', 'lịch sử kho', 'lich su kho', 'movement'],
+        'product_prices' => ['giá', 'bảng giá', 'bang gia', 'giá bán', 'gia ban', 'giá nhập', 'gia nhap', 'price'],
     ];
 
     $scored = [];
@@ -115,7 +133,7 @@ function ai_retrieve_schema_context(string $question): string {
         foreach ($hints as $table => $keywords) {
             if (str_contains($lineLower, '`' . $table . '(')) {
                 foreach ($keywords as $kw) {
-                    if (str_contains($qLower, $kw)) {
+                    if (str_contains($qLower, $kw) || str_contains($qNorm, $kw)) {
                         $score += 5;
                     }
                 }
@@ -135,6 +153,149 @@ function ai_retrieve_schema_context(string $question): string {
         implode("\n", $selectedLines) . "\n\n" .
         implode("\n", $footerLines)
     );
+}
+
+/**
+ * Dynamic lexical RAG retrieval of top-K verified Vietnamese Q->SQL few-shot examples.
+ */
+function ai_retrieve_few_shot_examples(string $question, int $topK = 4): array {
+    $path = __DIR__ . '/ai/few_shot_examples.php';
+    if (!is_file($path)) {
+        return [];
+    }
+    $examples = require $path;
+    if (!is_array($examples) || !$examples) {
+        return [];
+    }
+
+    $qNorm = ai_normalize_vi($question);
+    $qTokens = array_values(array_unique(array_filter(
+        preg_split('/[^a-z0-9_]+/', $qNorm, -1, PREG_SPLIT_NO_EMPTY) ?: [],
+        static fn(string $t): bool => strlen($t) >= 2
+    )));
+
+    $scored = [];
+    foreach ($examples as $idx => $ex) {
+        $score = 0;
+        $tags = $ex['tags'] ?? [];
+        foreach ($tags as $tag) {
+            $tagNorm = ai_normalize_vi((string)$tag);
+            if ($tagNorm !== '' && str_contains($qNorm, $tagNorm)) {
+                $score += (str_contains($tagNorm, ' ') ? 8 : 5);
+            }
+        }
+        $exQNorm = ai_normalize_vi((string)($ex['question'] ?? ''));
+        foreach ($qTokens as $tok) {
+            if (str_contains($exQNorm, $tok)) {
+                $score += 2;
+            }
+        }
+        $scored[] = ['idx' => $idx, 'score' => $score, 'example' => $ex];
+    }
+
+    usort($scored, static fn($a, $b) => $b['score'] <=> $a['score'] ?: $a['idx'] <=> $b['idx']);
+
+    $selected = [];
+    foreach ($scored as $item) {
+        if (count($selected) >= $topK) {
+            break;
+        }
+        // Only include refusal (sql === null) examples when they actually matched query intent
+        if (($item['example']['sql'] ?? '') === null && $item['score'] <= 0) {
+            continue;
+        }
+        if ($item['score'] > 0) {
+            $selected[] = $item['example'];
+        }
+    }
+
+    // Fallback to top 3 core inventory SQL examples if no keywords matched
+    if (!$selected) {
+        foreach ($examples as $ex) {
+            if (($ex['sql'] ?? null) === null) {
+                continue;
+            }
+            $selected[] = $ex;
+            if (count($selected) >= min(3, $topK)) {
+                break;
+            }
+        }
+    }
+
+    return $selected;
+}
+
+/**
+ * Live Value Grounding from read-only public lookup tables (warehouses, categories, units).
+ * Never accesses admins, roles, permissions, or private user tables.
+ */
+function ai_retrieve_catalog_values(): string {
+    static $cached = null;
+    if ($cached !== null) {
+        return $cached;
+    }
+
+    try {
+        $pdo = ai_db();
+        $whRows = $pdo->query('SELECT code, name FROM warehouses WHERE is_active = 1 ORDER BY id LIMIT 30')->fetchAll(PDO::FETCH_ASSOC);
+        $catRows = $pdo->query('SELECT name FROM categories WHERE status = 1 ORDER BY id LIMIT 30')->fetchAll(PDO::FETCH_ASSOC);
+        $unitRows = $pdo->query('SELECT code, name FROM units WHERE is_active = 1 ORDER BY id LIMIT 20')->fetchAll(PDO::FETCH_ASSOC);
+
+        $whList = array_map(static fn($r) => $r['code'] . '="' . $r['name'] . '"', $whRows);
+        $catList = array_map(static fn($r) => '"' . $r['name'] . '"', $catRows);
+        $unitList = array_map(static fn($r) => $r['code'] . '="' . $r['name'] . '"', $unitRows);
+
+        $lines = ['Actual catalog values in database (use these exact codes/names when filtering):'];
+        if ($whList) {
+            $lines[] = '- warehouses: ' . implode(', ', $whList);
+        }
+        if ($catList) {
+            $lines[] = '- categories: ' . implode(', ', $catList);
+        }
+        if ($unitList) {
+            $lines[] = '- units: ' . implode(', ', $unitList);
+        }
+        $cached = implode("\n", $lines);
+        return $cached;
+    } catch (Throwable $e) {
+        return '';
+    }
+}
+
+/**
+ * Assemble complete system prompt: ranked schema + live catalog values + dynamic few-shot examples + JSON contract.
+ */
+function ai_build_system_prompt(string $question, ?string $schemaContext = null): string {
+    $context = $schemaContext ?? ai_retrieve_schema_context($question);
+    $catalog = ai_retrieve_catalog_values();
+    $examples = ai_retrieve_few_shot_examples($question, 3);
+
+    $parts = [$context];
+    if ($catalog !== '') {
+        $parts[] = $catalog;
+    }
+    if ($examples) {
+        $exLines = ['Reference MySQL 8 examples (adapt SELECT columns, JOINs, filters, and GROUP BY to match the exact user question; omit stock_balances when asked for all lots including zero-stock lots; use ABS(SUM(sm.quantity)) when asked for positive issued quantities; select d.number and d.partner_name when asked to list individual documents):'];
+        foreach ($examples as $ex) {
+            $exLines[] = 'Q: ' . $ex['question'];
+            if (($ex['sql'] ?? null) === null) {
+                $exLines[] = 'JSON: ' . json_encode([
+                    'sql' => null,
+                    'explanation' => $ex['explanation'] ?? 'Cơ sở dữ liệu kho hiện tại không lưu thông tin này.',
+                ], JSON_UNESCAPED_UNICODE);
+            } else {
+                $exLines[] = 'SQL: ' . $ex['sql'];
+            }
+        }
+        $parts[] = implode("\n", $exLines);
+    }
+
+    $parts[] = "Return ONLY a valid JSON object with exactly two keys:\n"
+        . "- \"sql\": a single MySQL 8 SELECT (or WITH ... SELECT) query using ONLY the 11 allowed tables and exact column names above (no trailing semicolon, no markdown, no comments, LIMIT <= 200). ALWAYS generate a SQL query whenever the question involves products, categories, units, warehouses, locations, lots, purchase/sale prices or price differences, stock balances, documents/lines, or stock movements. ONLY set \"sql\" to null when the question asks for entities that do NOT exist in these 11 tables (such as employees, staff payroll/salaries, commissions, customer sales orders/revenue, or admin/RBAC tables).\n"
+        . "- \"explanation\": a brief Vietnamese explanation of what the query calculates (or why the database does not contain the requested information when \"sql\" is null).\n"
+        . "Do not output any text outside the JSON object.";
+
+    return implode("\n\n", $parts);
 }
 
 /**
@@ -204,33 +365,48 @@ function ai_resolve_model(?string $requested): string {
 }
 
 /**
- * Call local Ollama /api/chat expecting JSON {"sql": "...", "explanation": "..."}.
+ * Call local Ollama /api/chat expecting JSON {"sql": "..."|null, "explanation": "..."}.
+ * Optionally includes previous failed SQL + error for self-correction repair turns.
  */
-function ai_ollama_json(string $question, ?string $schemaContext = null, ?string $model = null): array {
+function ai_ollama_json(
+    string $question,
+    ?string $schemaContext = null,
+    ?string $model = null,
+    ?string $prevSql = null,
+    ?string $prevError = null
+): array {
     $config = require __DIR__ . '/config.php';
     $ollama = $config['ollama'];
     $usedModel = ai_resolve_model($model);
-    $context = $schemaContext ?? ai_retrieve_schema_context($question);
+    $systemPrompt = ai_build_system_prompt($question, $schemaContext);
 
-    $systemPrompt = $context . "\n\n"
-        . "Return ONLY a valid JSON object with exactly two keys:\n"
-        . "- \"sql\": a single MySQL 8 SELECT query (no trailing semicolon, no markdown, no comments, LIMIT <= 200).\n"
-        . "- \"explanation\": a brief Vietnamese explanation of what the query calculates.\n"
-        . "Do not output any text outside the JSON object.";
+    $messages = [
+        ['role' => 'system', 'content' => $systemPrompt],
+        ['role' => 'user', 'content' => $question],
+    ];
+    if ($prevSql !== null && $prevError !== null) {
+        $messages[] = [
+            'role' => 'assistant',
+            'content' => json_encode(['sql' => $prevSql, 'explanation' => ''], JSON_UNESCAPED_UNICODE),
+        ];
+        $messages[] = [
+            'role' => 'user',
+            'content' => "Câu SQL trước bị lỗi khi kiểm duyệt/thực thi: {$prevError}\n"
+                . "Hãy sửa lại câu MySQL 8 SELECT hợp lệ chỉ dùng đúng 11 bảng được phép và đúng tên cột trong schema context, không dùng hàm tổng hợp (SUM/COUNT/AVG) trong WHERE (hãy dùng HAVING), và trả về đúng JSON {\"sql\": ..., \"explanation\": ...}.",
+        ];
+    }
 
     $payload = json_encode([
         'model' => $usedModel,
         'stream' => false,
         'format' => 'json',
         'options' => [
-            'temperature' => 0.1,
-            'repeat_penalty' => 1.15,
-            'num_predict' => 512,
+            'temperature' => 0.0,
+            'repeat_penalty' => 1.0,
+            'num_predict' => 640,
+            'num_ctx' => 4096,
         ],
-        'messages' => [
-            ['role' => 'system', 'content' => $systemPrompt],
-            ['role' => 'user', 'content' => $question],
-        ],
+        'messages' => $messages,
     ], JSON_UNESCAPED_UNICODE);
 
     $ch = curl_init($ollama['url'] . '/api/chat');
@@ -270,19 +446,213 @@ function ai_ollama_json(string $question, ?string $schemaContext = null, ?string
     $content = preg_replace('/\s*```$/', '', $content);
 
     $result = json_decode((string)$content, true);
-    if (!is_array($result) || empty($result['sql']) || !is_string($result['sql'])) {
+    if (!is_array($result)) {
+        throw new RuntimeException('Mô hình không sinh được phản hồi JSON hợp lệ.');
+    }
+
+    $explanation = isset($result['explanation']) && is_string($result['explanation']) ? trim($result['explanation']) : '';
+    $rawSql = $result['sql'] ?? null;
+
+    if ($rawSql === null || (is_string($rawSql) && trim($rawSql) === '')) {
+        if ($explanation !== '') {
+            return [
+                'model' => $usedModel,
+                'sql' => null,
+                'explanation' => $explanation,
+                'refused' => true,
+            ];
+        }
+        throw new RuntimeException('Mô hình không sinh được câu SQL hợp lệ trong JSON.');
+    }
+
+    if (!is_string($rawSql)) {
         throw new RuntimeException('Mô hình không sinh được câu SQL hợp lệ trong JSON.');
     }
 
     return [
         'model' => $usedModel,
-        'sql' => trim($result['sql']),
-        'explanation' => isset($result['explanation']) && is_string($result['explanation']) ? trim($result['explanation']) : '',
+        'sql' => trim($rawSql),
+        'explanation' => $explanation,
+        'refused' => false,
     ];
 }
 
 /**
- * Strict SQL allowlist validator (single SELECT, allowed tables only, LIMIT <= 200).
+ * Strip balanced argument lists of SQL functions that contain `FROM` syntax (EXTRACT/TRIM/SUBSTRING).
+ */
+function ai_strip_balanced_functions(string $sql, array $fnNames): string {
+    $pattern = '/\b(' . implode('|', $fnNames) . ')\s*\(/i';
+    $out = '';
+    $len = strlen($sql);
+    $offset = 0;
+
+    while (preg_match($pattern, $sql, $m, PREG_OFFSET_CAPTURE, $offset)) {
+        $matchPos = $m[0][1];
+        $fnName = $m[1][0];
+        $openPos = $matchPos + strlen($m[0][0]) - 1;
+
+        $depth = 0;
+        $pos = $openPos;
+        while ($pos < $len) {
+            $ch = $sql[$pos];
+            if ($ch === '(') {
+                $depth++;
+            } elseif ($ch === ')') {
+                $depth--;
+                if ($depth === 0) {
+                    break;
+                }
+            }
+            $pos++;
+        }
+
+        if ($depth !== 0) {
+            break;
+        }
+
+        $out .= substr($sql, $offset, $matchPos - $offset) . $fnName . '()';
+        $offset = $pos + 1;
+    }
+
+    return $out . substr($sql, $offset);
+}
+
+/**
+ * Extract top-level CTE alias names from a `WITH [RECURSIVE] ...` query.
+ */
+function ai_extract_cte_names(string $sqlNoStrings): array {
+    if (!preg_match('/^\s*WITH(?:\s+RECURSIVE)?\s+/i', $sqlNoStrings, $m, PREG_OFFSET_CAPTURE)) {
+        return [];
+    }
+    $pos = $m[0][1] + strlen($m[0][0]);
+    $len = strlen($sqlNoStrings);
+    $cteNames = [];
+
+    while ($pos < $len) {
+        if (!preg_match('/\G\s*(`?[a-zA-Z_][a-zA-Z0-9_]*`?)\s*(?:\([^()]*\))?\s+AS\s*\(/i', $sqlNoStrings, $cm, 0, $pos)) {
+            break;
+        }
+        $cteNames[] = strtolower(str_replace('`', '', $cm[1]));
+        $openPos = $pos + strlen($cm[0]) - 1;
+        $depth = 0;
+        $p = $openPos;
+        while ($p < $len) {
+            if ($sqlNoStrings[$p] === '(') {
+                $depth++;
+            } elseif ($sqlNoStrings[$p] === ')') {
+                $depth--;
+                if ($depth === 0) {
+                    $p++;
+                    break;
+                }
+            }
+            $p++;
+        }
+        if ($depth !== 0) {
+            break;
+        }
+        $pos = $p;
+        while ($pos < $len && ctype_space($sqlNoStrings[$pos])) {
+            $pos++;
+        }
+        if ($pos < $len && $sqlNoStrings[$pos] === ',') {
+            $pos++;
+            continue;
+        }
+        break;
+    }
+
+    return array_values(array_unique($cteNames));
+}
+
+/**
+ * Extract all table identifiers referenced in FROM (including comma-joins), JOIN, and STRAIGHT_JOIN.
+ */
+function ai_extract_table_refs(string $sqlForTables): array {
+    $refs = [];
+
+    // 1. All JOIN and STRAIGHT_JOIN targets
+    if (preg_match_all('/\b(?:STRAIGHT_)?JOIN\s+(?!\()(`?[a-zA-Z0-9_]+`?(?:\s*\.\s*`?[a-zA-Z0-9_]+`?)?)/i', $sqlForTables, $jm)) {
+        foreach ($jm[1] as $raw) {
+            $refs[] = $raw;
+        }
+    }
+
+    // 2. All FROM clauses (including comma-separated table lists at depth 0)
+    $len = strlen($sqlForTables);
+    $boundaryRegex = '/^(?:WHERE|GROUP\s+BY|HAVING|ORDER\s+BY|LIMIT|UNION|INTERSECT|EXCEPT|WINDOW|FOR|LOCK|INTO|ON|USING|SET|VALUES|LEFT|RIGHT|INNER|OUTER|CROSS|NATURAL|STRAIGHT_JOIN|JOIN)\b/i';
+
+    if (preg_match_all('/\bFROM\b/i', $sqlForTables, $fm, PREG_OFFSET_CAPTURE)) {
+        foreach ($fm[0] as $match) {
+            $start = $match[1] + strlen($match[0]);
+            $depth = 0;
+            $pos = $start;
+            while ($pos < $len) {
+                $ch = $sqlForTables[$pos];
+                if ($ch === '(') {
+                    $depth++;
+                    $pos++;
+                    continue;
+                }
+                if ($ch === ')') {
+                    if ($depth === 0) {
+                        break;
+                    }
+                    $depth--;
+                    $pos++;
+                    continue;
+                }
+                if ($depth === 0 && ($pos === $start || !preg_match('/[a-zA-Z0-9_]/', $sqlForTables[$pos - 1]))) {
+                    if (preg_match($boundaryRegex, substr($sqlForTables, $pos))) {
+                        break;
+                    }
+                }
+                $pos++;
+            }
+
+            $segment = trim(substr($sqlForTables, $start, $pos - $start));
+            if ($segment === '') {
+                continue;
+            }
+
+            // Split segment by depth-0 commas
+            $factors = [];
+            $cur = '';
+            $d = 0;
+            $segLen = strlen($segment);
+            for ($i = 0; $i < $segLen; $i++) {
+                $c = $segment[$i];
+                if ($c === '(') {
+                    $d++;
+                } elseif ($c === ')') {
+                    $d--;
+                } elseif ($c === ',' && $d === 0) {
+                    $factors[] = trim($cur);
+                    $cur = '';
+                    continue;
+                }
+                $cur .= $c;
+            }
+            if (trim($cur) !== '') {
+                $factors[] = trim($cur);
+            }
+
+            foreach ($factors as $factor) {
+                if ($factor === '' || str_starts_with($factor, '(')) {
+                    continue;
+                }
+                if (preg_match('/^(`?[a-zA-Z0-9_]+`?(?:\s*\.\s*`?[a-zA-Z0-9_]+`?)?)/', $factor, $tm)) {
+                    $refs[] = $tm[1];
+                }
+            }
+        }
+    }
+
+    return $refs;
+}
+
+/**
+ * Strict SQL allowlist validator (single SELECT or read-only WITH ... SELECT, allowed tables only, LIMIT <= 200).
  */
 function ai_validate_select(string $sql): string {
     $sql = trim($sql);
@@ -296,7 +666,7 @@ function ai_validate_select(string $sql): string {
         throw new InvalidArgumentException('Câu SQL rỗng.');
     }
 
-    // Disallow multiple statements
+    // Disallow multiple statements (outside string literals check below as well, and strict global check)
     if (str_contains($sql, ';')) {
         throw new InvalidArgumentException('Chỉ cho phép đúng một câu lệnh SELECT.');
     }
@@ -306,57 +676,76 @@ function ai_validate_select(string $sql): string {
         throw new InvalidArgumentException('Không cho phép comment trong câu SQL.');
     }
 
-    // Must start with SELECT
-    if (!preg_match('/^SELECT\b/i', $sql)) {
-        throw new InvalidArgumentException('Chỉ cho phép câu lệnh bắt đầu bằng SELECT.');
-    }
+    // Strip string literals FIRST so keywords/symbols inside Vietnamese text filters don't trigger false positives
+    $sqlNoStrings = (string)preg_replace("/'(?:\\\\.|[^'\\\\])*'|\"(?:\\\\.|[^\"\\\\])*\"/", "''", $sql);
 
-    // Disallow session/system variables
-    if (preg_match('/@@?[a-zA-Z_]/', $sql)) {
+    // Disallow session/system variables outside string literals
+    if (preg_match('/@@?[a-zA-Z_]/', $sqlNoStrings)) {
         throw new InvalidArgumentException('Không cho phép dùng biến session/system trong SQL.');
     }
 
-    // Disallow dangerous keywords, DML/DDL, file I/O, locking, sleep
-    $forbiddenPattern = '/\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|REPLACE|MERGE|GRANT|REVOKE|CALL|EXECUTE|PREPARE|DEALLOCATE|LOCK|UNLOCK|SLEEP|BENCHMARK|LOAD_FILE|OUTFILE|DUMPFILE|HANDLER|SHOW|DESCRIBE|EXPLAIN|USE|SET|DO|KILL|FLUSH|RESET|PURGE|SHUTDOWN)\b/i';
-    if (preg_match($forbiddenPattern, $sql, $m)) {
+    // Disallow dangerous keywords, DML/DDL, file I/O, locking, sleep (checked before SELECT check so DELETE/UPDATE are flagged as security errors)
+    $forbiddenPattern = '/\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|MERGE|GRANT|REVOKE|CALL|EXECUTE|PREPARE|DEALLOCATE|LOCK|UNLOCK|SLEEP|BENCHMARK|LOAD_FILE|OUTFILE|DUMPFILE|HANDLER|SHOW|DESCRIBE|EXPLAIN|USE|SET|DO|KILL|FLUSH|RESET|PURGE|SHUTDOWN)\b/i';
+    if (preg_match($forbiddenPattern, $sqlNoStrings, $m)) {
         throw new InvalidArgumentException('SQL chứa từ khóa bị cấm: ' . strtoupper($m[1]));
     }
 
+    // Disallow REPLACE DML statement while permitting safe string function REPLACE(...)
+    if (preg_match('/\bREPLACE\s*(?!\()/i', $sqlNoStrings)) {
+        throw new InvalidArgumentException('SQL chứa từ khóa bị cấm: REPLACE');
+    }
+
+    // Disallow MySQL 8 row-locking clauses (FOR UPDATE / FOR SHARE)
+    if (preg_match('/\bFOR\s+(?:UPDATE|SHARE)\b/i', $sqlNoStrings, $m)) {
+        throw new InvalidArgumentException('Không cho phép mệnh đề khóa dòng: ' . strtoupper($m[0]));
+    }
+
+    // Must start with SELECT or read-only CTE (WITH ... SELECT)
+    if (!preg_match('/^(?:SELECT|WITH)\b/i', $sqlNoStrings)) {
+        throw new InvalidArgumentException('Chỉ cho phép câu lệnh bắt đầu bằng SELECT.');
+    }
+    if (preg_match('/^WITH\b/i', $sqlNoStrings) && !preg_match('/\bSELECT\b/i', $sqlNoStrings)) {
+        throw new InvalidArgumentException('CTE phải đi kèm câu lệnh SELECT.');
+    }
+
     // Disallow system schemas
-    if (preg_match('/\b(information_schema|mysql|performance_schema|sys)\s*\./i', $sql, $m)) {
+    if (preg_match('/\b(information_schema|mysql|performance_schema|sys)\s*\./i', $sqlNoStrings, $m)) {
         throw new InvalidArgumentException('Không được phép truy vấn schema hệ thống: ' . $m[1]);
     }
 
-    // Strip string literals before scanning table names
-    $sqlNoStrings = preg_replace("/'(?:\\\\.|[^'\\\\])*'|\"(?:\\\\.|[^\"\\\\])*\"/", "''", $sql);
-    // Remove EXTRACT(... FROM ...), TRIM(... FROM ...), SUBSTRING(... FROM ...) so FROM isn't misread as table
-    $sqlForTables = preg_replace('/\b(EXTRACT|TRIM|SUBSTRING)\s*\([^()]*\)/i', '$1()', (string)$sqlNoStrings);
+    // Extract CTE aliases (valid only within this query) and strip EXTRACT/TRIM/SUBSTRING(... FROM ...) safely
+    $cteNames = ai_extract_cte_names($sqlNoStrings);
+    $sqlForTables = ai_strip_balanced_functions($sqlNoStrings, ['EXTRACT', 'TRIM', 'SUBSTRING']);
 
     $allowed = ai_allowed_tables();
-    $foundTables = [];
+    $foundPhysicalTables = [];
+    $config = require __DIR__ . '/config.php';
+    $allowedDb = strtolower((string)$config['ai_db']['database']);
 
-    if (preg_match_all('/\b(?:FROM|JOIN)\s+(?!\()(`?[a-zA-Z0-9_]+`?(?:\s*\.\s*`?[a-zA-Z0-9_]+`?)?)/i', (string)$sqlForTables, $matches)) {
-        foreach ($matches[1] as $rawTable) {
-            $clean = str_replace('`', '', preg_replace('/\s+/', '', $rawTable));
-            if (str_contains($clean, '.')) {
-                [$schema, $table] = explode('.', $clean, 2);
-                $config = require __DIR__ . '/config.php';
-                $allowedDb = strtolower((string)$config['ai_db']['database']);
-                if (strtolower($schema) !== $allowedDb) {
-                    throw new InvalidArgumentException('Không được phép truy vấn database khác: ' . $schema);
-                }
-            } else {
-                $table = $clean;
+    foreach (ai_extract_table_refs($sqlForTables) as $rawTable) {
+        $clean = str_replace('`', '', (string)preg_replace('/\s+/', '', $rawTable));
+        $isSchemaQualified = str_contains($clean, '.');
+        if ($isSchemaQualified) {
+            [$schema, $table] = explode('.', $clean, 2);
+            if (strtolower($schema) !== $allowedDb) {
+                throw new InvalidArgumentException('Không được phép truy vấn database khác: ' . $schema);
             }
-            $tableLower = strtolower($table);
-            if (!in_array($tableLower, $allowed, true)) {
-                throw new InvalidArgumentException('Bảng không nằm trong danh sách được phép: ' . $table);
-            }
-            $foundTables[] = $tableLower;
+        } else {
+            $table = $clean;
         }
+
+        $tableLower = strtolower($table);
+        if (in_array($tableLower, $allowed, true)) {
+            $foundPhysicalTables[] = $tableLower;
+            continue;
+        }
+        if (!$isSchemaQualified && in_array($tableLower, $cteNames, true)) {
+            continue;
+        }
+        throw new InvalidArgumentException('Bảng không nằm trong danh sách được phép: ' . $table);
     }
 
-    if (!$foundTables) {
+    if (!$foundPhysicalTables) {
         throw new InvalidArgumentException('Câu SQL phải truy vấn ít nhất một bảng nghiệp vụ được phép.');
     }
 
@@ -429,7 +818,94 @@ function ai_execute_read_query(string $sql): array {
 }
 
 /**
- * Full RAG -> Ollama -> Validate -> Read-only MySQL execution pipeline.
+ * Determine whether an error represents a security/policy violation (must fail immediately without retry).
+ */
+function ai_is_security_error(Throwable $e): bool {
+    if ($e instanceof PDOException) {
+        $driverCode = (int)($e->errorInfo[1] ?? 0);
+        return in_array($driverCode, [1044, 1045, 1142, 1143], true);
+    }
+    if ($e instanceof InvalidArgumentException) {
+        $msg = $e->getMessage();
+        foreach ([
+            'Bảng không nằm trong danh sách được phép',
+            'SQL chứa từ khóa bị cấm',
+            'schema hệ thống',
+            'database khác',
+            'comment trong câu SQL',
+            'đúng một câu lệnh SELECT',
+            'biến session/system',
+            'mệnh đề khóa dòng',
+        ] as $marker) {
+            if (str_contains($msg, $marker)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+/**
+ * Orchestrate LLM generation -> validation -> execution with bounded SQL self-correction retries
+ * and clean out-of-domain refusal handling.
+ */
+function ai_run_question_pipeline(
+    string $question,
+    callable $llmGenerator,
+    callable $queryExecutor,
+    int $maxRetries = 2
+): array {
+    $prevSql = null;
+    $prevError = null;
+    $lastException = null;
+
+    for ($attempt = 0; $attempt <= $maxRetries; $attempt++) {
+        $llm = $llmGenerator($prevSql, $prevError);
+        $usedModel = (string)($llm['model'] ?? '');
+        $explanation = (string)($llm['explanation'] ?? '');
+        $refused = !empty($llm['refused']) || ($llm['sql'] ?? null) === null || trim((string)$llm['sql']) === '';
+
+        if ($refused) {
+            return [
+                'question' => $question,
+                'model' => $usedModel,
+                'explanation' => $explanation !== '' ? $explanation : 'Cơ sở dữ liệu kho hiện tại không có dữ liệu phù hợp để trả lời câu hỏi này.',
+                'sql' => '',
+                'columns' => [],
+                'rows' => [],
+                'row_count' => 0,
+                'refused' => true,
+            ];
+        }
+
+        $candidateSql = trim((string)$llm['sql']);
+        try {
+            $exec = $queryExecutor($candidateSql);
+            return [
+                'question' => $question,
+                'model' => $usedModel,
+                'explanation' => $explanation,
+                'sql' => $exec['sql'],
+                'columns' => $exec['columns'],
+                'rows' => $exec['rows'],
+                'row_count' => $exec['row_count'],
+                'refused' => false,
+            ];
+        } catch (Throwable $e) {
+            $lastException = $e;
+            if (ai_is_security_error($e) || $attempt >= $maxRetries) {
+                throw $e;
+            }
+            $prevSql = $candidateSql;
+            $prevError = $e->getMessage();
+        }
+    }
+
+    throw $lastException ?? new RuntimeException('Không thể xử lý câu hỏi AI.');
+}
+
+/**
+ * Full RAG -> Ollama (with self-correction retry) -> Validate -> Read-only MySQL execution pipeline.
  */
 function ai_ask_question(string $question, ?string $model = null): array {
     $question = trim($question);
@@ -437,18 +913,13 @@ function ai_ask_question(string $question, ?string $model = null): array {
         throw new InvalidArgumentException('Vui lòng nhập câu hỏi dữ liệu.');
     }
     $context = ai_retrieve_schema_context($question);
-    $llm = ai_ollama_json($question, $context, $model);
-    $exec = ai_execute_read_query($llm['sql']);
 
-    return [
-        'question' => $question,
-        'model' => $llm['model'],
-        'explanation' => $llm['explanation'],
-        'sql' => $exec['sql'],
-        'columns' => $exec['columns'],
-        'rows' => $exec['rows'],
-        'row_count' => $exec['row_count'],
-    ];
+    return ai_run_question_pipeline(
+        $question,
+        static fn(?string $prevSql, ?string $prevError): array => ai_ollama_json($question, $context, $model, $prevSql, $prevError),
+        'ai_execute_read_query',
+        2
+    );
 }
 
 /**
@@ -561,7 +1032,9 @@ function report_render_markdown(string $slug, ?string $model = null): array {
             if ($res['explanation'] !== '') {
                 $parts[] = '> ' . str_replace(["\r\n", "\r", "\n"], ' ', $res['explanation']);
             }
-            $parts[] = "```sql\n" . $res['sql'] . "\n```";
+            if ($res['sql'] !== '') {
+                $parts[] = "```sql\n" . $res['sql'] . "\n```";
+            }
             $parts[] = report_rows_to_markdown_table($res['columns'], $res['rows']);
             $parts[] = '_Tổng số dòng trả về: ' . $res['row_count'] . ' (giới hạn tối đa 200 dòng · model: ' . $res['model'] . ')._';
 
@@ -620,6 +1093,8 @@ function report_markdown_to_pdf(string $markdown, string $pdfPath): void {
     $dompdf->render();
 
     $output = $dompdf->output();
+    unset($dompdf);
+    gc_collect_cycles();
     if (file_put_contents($pdfPath, $output) === false) {
         throw new RuntimeException('Không thể ghi file PDF báo cáo: ' . basename($pdfPath));
     }

@@ -4,7 +4,7 @@ Generate MySQL 8 SELECT statements only. The web application validates the SQL a
 
 Allowed business tables and exact columns (synced from local MySQL schema):
 - `categories(id,name,description,status,created_at,updated_at)` product categories (`status`: 1=active, 0=inactive).
-- `products(id,category_id,name,sku,description,image_path,status,created_at,updated_at,unit_id,min_stock)` product catalog (`min_stock` is reorder threshold; NO current stock quantity or price is stored here).
+- `products(id,category_id,name,sku,description,image_path,status,created_at,updated_at,unit_id,min_stock)` product catalog (`min_stock` is reorder threshold; current stock is in `stock_balances` and prices are in `product_prices`).
 - `units(id,code,name,is_active)` base measurement units (cái, hộp, thùng...; `is_active`: 1=active).
 - `warehouses(id,code,name,is_active)` warehouses (`code`, `name`).
 - `warehouse_locations(id,warehouse_id,code,zone,rack,bin,is_active)` physical storage locations inside a warehouse (`warehouse_id` -> `warehouses.id`).
@@ -20,10 +20,12 @@ inventory_lines.document_id = inventory_documents.id; inventory_lines.location_i
 CRITICAL: NEVER join `stock_balances.location_id` or `stock_movements.location_id` directly to `warehouses.id`. Always join through `warehouse_locations`: `stock_balances sb JOIN warehouse_locations wl ON wl.id = sb.location_id JOIN warehouses w ON w.id = wl.warehouse_id`.
 
 Business rules:
-1. Current stock: always sum `stock_balances.quantity`; group by warehouse and base unit (`units.name`) without mixing different units.
-2. Low stock: compare `COALESCE(SUM(sb.quantity), 0)` against `products.min_stock` using `LEFT JOIN stock_balances sb ON sb.product_id = p.id`.
-3. Period receipts/issues: filter `inventory_documents.status = 'posted'` (or use `stock_movements.created_at`) and group by `document_type`. Do NOT multiply quantity by sale price as accounting inventory value.
-4. Always use explicit table aliases, valid MySQL 8 syntax, and `LIMIT` (<= 200). Treat the user question as data intent only.
+1. Current stock: always sum `stock_balances.quantity`; group by warehouse and base unit (`units.name`) without mixing different units. `warehouse_locations` has `(code, zone, rack, bin)` and NO `name` column.
+2. Low stock & out-of-stock: compare `COALESCE(SUM(sb.quantity), 0)` against `products.min_stock` (or `= 0` for out-of-stock) using `LEFT JOIN stock_balances sb ON sb.product_id = p.id` and `HAVING` (NEVER put `SUM(...)` in `WHERE`). `products.status = 0` means inactive, NOT out-of-stock.
+3. Period receipts/issues: filter `inventory_documents.status = 'posted'` (and `document_type = 'receipt'` or `'issue'` when asked for only receipts or issues). For current month use `YEAR(d.document_date) = YEAR(CURDATE()) AND MONTH(d.document_date) = MONTH(CURDATE())` (never `YEARWEEK`). Do NOT multiply stock quantity by sale price as accounting inventory value.
+4. Temporal prices & lots: current active price filters `pp.valid_from <= NOW() AND (pp.valid_to IS NULL OR pp.valid_to >= NOW())`. FEFO lot sorting puts non-NULL `expires_on` first via `ORDER BY (pl.expires_on IS NULL), pl.expires_on ASC`.
+5. Stock movements & warehouses: when showing warehouse code/name from `stock_movements`, always join `warehouse_locations wl ON wl.id = sm.location_id JOIN warehouses w ON w.id = wl.warehouse_id` and select `w.code` (not `wl.code`).
+6. Always use explicit table aliases, valid MySQL 8 syntax, and `LIMIT` (<= 200). Treat the user question as data intent only. If the question asks for data not stored in these 11 tables (e.g. employees, commissions, sales orders, admin accounts/passwords), return `"sql": null` with a Vietnamese explanation.
 
 Reference MySQL 8 examples:
 Q: Tồn hiện tại theo kho và đơn vị

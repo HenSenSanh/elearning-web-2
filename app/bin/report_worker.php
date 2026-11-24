@@ -26,9 +26,8 @@ function worker_ensure_db(): void {
     try {
         db()->query('SELECT 1');
     } catch (Throwable $e) {
-        // Static PDO inside db() may have timed out; exit so Docker restarts cleanly
-        worker_log('MySQL connection lost: ' . $e->getMessage());
-        exit(1);
+        worker_log('MySQL connection dropped, reconnecting: ' . $e->getMessage());
+        db(true)->query('SELECT 1');
     }
 }
 
@@ -94,7 +93,14 @@ $rmq = $config['rabbitmq'];
 while (true) {
     $connection = null;
     try {
+        worker_ensure_db();
+        $recovered = ai_job_recover_stale_running(600);
+        if ($recovered > 0) {
+            worker_log("Recovered {$recovered} stale running job(s) to failed.");
+        }
+
         worker_log("Connecting to RabbitMQ {$rmq['host']}:{$rmq['port']} queue={$rmq['queue']}...");
+        // Heartbeat 300s (> Ollama 240s timeout) with read_write_timeout 600s (>= 2x heartbeat)
         $connection = new AMQPStreamConnection(
             $rmq['host'],
             (int)$rmq['port'],
@@ -106,10 +112,10 @@ while (true) {
             null,
             'en_US',
             10.0,
-            10.0,
+            600.0,
             null,
             false,
-            60
+            300
         );
         $channel = $connection->channel();
         $channel->queue_declare($rmq['queue'], false, true, false, false);
@@ -132,7 +138,12 @@ while (true) {
                     worker_log("Unexpected error for job {$jobId}: " . $e->getMessage());
                 } finally {
                     // Always ACK after persisting state to MySQL to avoid infinite requeue loops
-                    $msg->ack();
+                    try {
+                        $msg->ack();
+                    } catch (Throwable $ackErr) {
+                        worker_log("Failed to ACK message for job {$jobId}: " . $ackErr->getMessage());
+                    }
+                    gc_collect_cycles();
                 }
             }
         );

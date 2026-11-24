@@ -49,9 +49,9 @@ for path in ['/dashboard', '/inventory', '/documents', '/documents/create?type=r
     check(status == 200 and 'Warning:' not in body and 'Fatal error' not in body, 'admin GET ' + path)
 check(request(admin, '/products/delete')[0] == 405, 'GET cannot delete a product')
 check(request(admin, '/products/delete', {'id': 1})[0] == 419, 'POST without CSRF is rejected')
-status, body, _ = request(admin, '/documents')
+status, body, _ = request(admin, '/documents?status=posted')
 match = re.search(r'/documents/show\?id=(\d+)', html.unescape(body))
-check(match is not None, 'opening inventory slip is listed')
+check(match is not None, 'posted inventory slip is listed')
 if match:
     check(request(admin, '/documents/print?id=' + match.group(1))[0] == 200, 'posted opening slip has a print view')
 viewer = login('viewer', 'viewer123')

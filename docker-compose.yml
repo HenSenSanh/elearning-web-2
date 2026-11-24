@@ -25,7 +25,7 @@ services:
       dockerfile: docker/php/Dockerfile
     container_name: php_admin_product_report_worker
     restart: unless-stopped
-    command: ["php", "/var/www/html/bin/report_worker.php"]
+    command: ["php", "-d", "memory_limit=512M", "/var/www/html/bin/report_worker.php"]
     volumes:
       - ./app:/var/www/html
       - ./reports:/var/www/reports
@@ -89,6 +89,8 @@ services:
     image: ollama/ollama:latest
     container_name: php_admin_product_ollama
     restart: unless-stopped
+    environment:
+      OLLAMA_MAX_LOADED_MODELS: "1"
     ports:
       - "11434:11434"
     volumes:

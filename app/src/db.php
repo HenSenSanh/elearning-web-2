@@ -1,6 +1,9 @@
 <?php
-function db(): PDO {
+function db(bool $reconnect = false): PDO {
     static $pdo = null;
+    if ($reconnect) {
+        $pdo = null;
+    }
     if ($pdo !== null) return $pdo;
     $config = require __DIR__ . "/config.php";
     $d = $config["db"];

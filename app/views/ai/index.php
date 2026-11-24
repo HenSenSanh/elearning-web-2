@@ -152,7 +152,6 @@ $initialJob = $latestJob ?? null;
 (function () {
     var form = document.getElementById('ai-ask-form');
     var qBox = document.getElementById('ai-question');
-    var modelSel = document.getElementById('ai-model');
     var submitBtn = document.getElementById('ai-submit-btn');
     var errBox = document.getElementById('ai-inline-error');
     var resultPanel = document.getElementById('ai-result-panel');
